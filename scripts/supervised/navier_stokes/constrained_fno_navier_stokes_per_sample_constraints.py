@@ -1,0 +1,365 @@
+# Constrained FNO for Navier Stokes with constrains per sample (e.g. PDE constraint is per sample and not an average over all samples)
+
+# TODO: multiply per sample constraints by factor 1/n_samples? Otherwise, more samples will mean less emphasis on the objective
+
+import sys
+import os
+import argparse
+from datetime import datetime
+import pickle
+
+import torch.utils
+
+sys.path.append('.')
+sys.path.append('/home/gridsan/vmoro/CSL/csl_neuraloperator')  
+sys.path.append('/home/hk-project-test-p0021798/st_ac144859/csl_neuraloperator')
+
+import torch
+import wandb
+
+from csl_neuraloperator.per_sample_constraints.csl_problem import ConstrainedStatisticalLearningProblem
+from csl_neuraloperator.per_sample_constraints.solver import SimultaneousPrimalDual
+from csl_neuraloperator.neuraloperator.neuralop.models import FNO
+from csl_neuraloperator.pde_losses import NavierStokesPDE_Loss
+from csl_neuraloperator.per_sample_constraints.dataset import DatasetPerSampleConstraints
+from csl_neuraloperator.utils import *
+
+parser = argparse.ArgumentParser(description='FNO for Navier Stokes')
+
+parser.add_argument('--seed', type=int, default=0, help='Random initialization.')
+parser.add_argument('--epochs', type=int, default=500, help='Number of epochs to train for')
+parser.add_argument('--batch_size', type=int, default=20, help='Batch size for training.')
+parser.add_argument('--lr_primal', type=float, default=1e-3, help='Learning rate for primal variables (NN parameters).')
+parser.add_argument('--lr_dual', type=float, default=1e-4, help='Learning rate for dual variables (lambdas).')
+parser.add_argument('--eps', nargs='+', default=[1e-3], help='Tolerances for the constraints.')
+parser.add_argument('--per_sample_eps', nargs='+', default=[1e-3], help='Tolerances for the per sample constraints. All samples for a per sample constraint share the same tolerance.')
+parser.add_argument('--use_primal_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler for the primal variables.')
+parser.add_argument('--use_dual_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler for the dual variables.')
+
+parser.add_argument('--pde_loss_method', type=str, default='fdm_fourier_hybrid', help='Method used to compute the PDE loss/physics-informed loss (if the pde loss is used).')
+parser.add_argument('--viscosity', type=float, choices=[1e-3, 1e-4, 1e-5], default=1e-3, help='Viscosity of the fluid.')
+parser.add_argument('--constrained_problem_formulation', choices=['per_sample_data', 'interior_data_with_per_sample_pde', 'boundary_data_with_per_sample_pde'], default='per_sample_data', help='Formulation of the constrained learning problem.')
+
+parser.add_argument('--n_train', type=int, default=1000, help='Number of training samples.')
+parser.add_argument('--n_test', type=int, default=200, help='Number of test samples.')
+
+parser.add_argument('--n_modes', type=int, default=8, help='Number of Fourier modes to use.')
+parser.add_argument('--hidden_channels', type=int, default=64, help='Width of the FNO(i.e. number of channels)')  
+parser.add_argument('--projection_channels', type=int, default=128, help='Number of hidden channels of the projection back to the output')
+parser.add_argument('--n_layers', type=int, default=8, help='Number of Fourier layers to use.')
+# parser.add_argument('--n_modes', type=int, default=8, help='Number of Fourier modes to use.')
+# parser.add_argument('--hidden_channels', type=int, default=20, help='Width of the FNO(i.e. number of channels)')
+# parser.add_argument('--projection_channels', type=int, default=128, help='Number of hidden channels of the projection back to the output')
+# parser.add_argument('--n_layers', type=int, default=4, help='Number of Fourier layers to use.')
+
+parser.add_argument('--save_model', default=True)
+parser.add_argument('--eval_every', type=int, default=1, help='Evaluate the model every n epochs.')
+parser.add_argument('--visualize', default=False, help='Visualize the solution and prediction of the model.')
+parser.add_argument('--plot_diagnostics', default=True, help='Plot diagnostics of the model.')
+parser.add_argument('--wandb_project_name', type=str, default='csl_neuraloperator')   
+parser.add_argument('--wandb_run_name', type=str, default='constrained_fno_navier_stokes_per_sample')
+parser.add_argument('--run_location', choices=['locally', 'supercloud', 'horeka'], default='locally', help='Choose where the script is executed.')
+
+
+class ConstrainedFNO_NavierStokes_PerSampleConstraints(ConstrainedStatisticalLearningProblem):
+    """Constrained FNO for Navier Stokes. The optimization problem is 
+    formulated as a statistical constrained learning probelm with average 
+    and/or per sample constraints."""
+    
+    def __init__(self, model, n_train_samples, grid_x_1d, grid_y_1d, gridt_1d, args):
+        self.model = model
+        self.device = next(model.parameters()).device
+        self.relative_L2_loss_fn = LpLoss()
+        self.per_sample_relative_L2_loss_fn = LpLoss(size_average=False, reduction=False)
+        self.pde_loss_fn = NavierStokesPDE_Loss(args.viscosity, grid_x_1d, grid_y_1d, gridt_1d, args.pde_loss_method) 
+        self.per_sample_pde_loss_fn = NavierStokesPDE_Loss(args.viscosity, grid_x_1d, grid_y_1d, gridt_1d, args.pde_loss_method, reduce=False) 
+
+        eps = [float(eps) for eps in args.eps]
+
+        # define objective, average constraints, per sample constraints and the the 
+        # right hand side (tolerance) for all constraints (i.e. the c in f_i(x) < c)
+        if args.constrained_problem_formulation == 'interior_data_with_per_sample_pde':
+            # data loss from all of the domain is the objective and the PDE loss for each sample are (seperate) constraints (i.e. per sample PDE loss constraints)
+            self.objective_function = self.data_loss
+            self.per_sample_constraints = [self.per_sample_pde_loss]
+            self.per_sample_rhs = [torch.full((n_train_samples,), float(per_sample_tol), device=self.device) for per_sample_tol in args.per_sample_eps]
+        elif args.constrained_problem_formulation == 'boundary_data_with_per_sample_pde':
+            # data loss from the boundary (IC and BC) is the objective and the PDE loss for each sample are (seperate) constraints (i.e. per sample PDE loss constraints)
+            self.objective_function = self.ic_and_bc_loss
+            self.per_sample_constraints = [self.per_sample_pde_loss]
+            self.per_sample_rhs = [torch.full((n_train_samples,), float(per_sample_tol), device=self.device) for per_sample_tol in args.per_sample_eps]
+        elif args.constrained_problem_formulation == 'per_sample_data':
+            self.objective_function = lambda: torch.tensor(1.0, dtype=float).to(self.device)
+            self.per_sample_constraints = [self.per_sample_data_loss]
+            self.per_sample_rhs = [torch.full((n_train_samples,), float(per_sample_tol), device=self.device) for per_sample_tol in args.per_sample_eps]
+        else:
+            raise ValueError('Invalid constrained problem formulation. Choose from: interior_data_with_per_sample_pde, boundary_data_with_per_sample_pde, per_sample_data.')
+
+        super().__init__()
+
+    def forward(self, x):
+        self.y_pred = self.model(x).squeeze(1)
+        self.x = x
+        self.prediction_stored = True
+        self.input_stored = True
+
+    def store_targets_and_samples_idx(self, sample_idx, y):
+        self.y = y
+        self.target_stored = True
+        self.samples_indices = sample_idx
+        self.samples_indices_stored = True
+
+    def reset(self):
+        self.prediction_computed = False
+        self.y_pred = None
+        self.input_stored = False
+        self.x = None
+        self.target_stored = False
+        self.y = None
+        self.samples_indices_stored = False
+        self.samples_indices = None
+
+
+    def data_loss(self):
+        """Computes the data loss (relative L2 loss)"""
+        data_loss = self.relative_L2_loss_fn(self.y_pred, self.y)
+        return data_loss
+    
+    def ic_loss(self):
+        """Computes the loss for the initial condition"""
+        y_ic_gt = self.y[:,0,:]         # initial condition for ground truth
+        y_ic_pred = self.y_pred[:,0,:]
+        ic_loss = self.relative_L2_loss_fn(y_ic_pred, y_ic_gt)
+        return ic_loss
+    
+    def bc_loss(self):
+        """Computes the loss for the boundary condition (loss for points on the spatial boundary)"""
+        y_bc_pred = get_bc_1d(self.y_pred)
+        y_bc_gt = get_bc_1d(self.y)
+        bc_loss = self.relative_L2_loss_fn(y_bc_pred, y_bc_gt)
+        return bc_loss
+    
+    def ic_and_bc_loss(self):
+        """Computes the loss for the initial and boundary conditions"""
+        ic_loss = self.ic_loss()
+        bc_loss = self.bc_loss()
+        return ic_loss + bc_loss
+    
+    def pde_loss(self):
+        """Computes the loss for the PDE, i.e. the physics-informed loss."""
+        pde_loss = self.pde_loss_fn(self.y_pred)
+        return pde_loss
+    
+    def per_sample_pde_loss(self):
+        """Computes the loss for the PDE, i.e. the physics-informed loss."""
+        per_samples_pde_loss = self.per_sample_pde_loss_fn(self.y_pred)
+        return per_samples_pde_loss
+    
+    def per_sample_data_loss(self):
+        """Computes the per sample loss for the data, i.e. the relative L2 loss."""
+        per_sample_data_loss = self.per_sample_relative_L2_loss_fn(self.y_pred, self.y)
+        return per_sample_data_loss
+
+
+def main():
+    args = parser.parse_args()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    set_seed(args.seed)
+
+    if args.run_location == 'locally':
+        path_base = ""
+    elif args.run_location == 'supercloud':
+        path_base = "/home/gridsan/vmoro/CSL/csl_neuraloperator/"
+    elif args.run_location == 'horeka':
+        path_base = "/home/hk-project-test-p0021798/st_ac144859/csl_neuraloperator/"
+    else:
+        raise ValueError('Invalid run location')
+
+    date_time = datetime.now()
+    date_time_string = date_time.strftime("%Y-%m-%d %H:%M:%S")
+    name_date = f"{args.wandb_run_name}_{date_time_string}"
+
+    # wandb logger
+    path_wandb = path_base + "saved/wandb_logs"
+    if not os.path.exists(path_wandb):
+        os.makedirs(path_wandb)
+    config = vars(args)
+    os.environ["WANDB_API_KEY"] = '2ba73edbdcfc28a2f25e4fb15eb9f9d6b5af890f'
+    os.environ["WANDB_MODE"] = 'offline'
+    os.environ["WANDB_DIR"] = path_wandb
+    
+    wandb.init(
+        project=args.wandb_project_name, 
+        name=f"{args.wandb_run_name}_{name_date}",
+        entity="viggomoro",
+        config=config
+        )
+
+    # load data - the first time step is used to predict all other time steps (including the first one)
+    if args.viscosity == 1e-3:
+        n_spatial = 64      # spatial grid size
+        n_temporal = 50     # temporal grid size
+        
+        # n_train = 1000      # TODO: can also use all 5000 samples if needed
+        # n_test = 200
+        data_path = path_base + 'data/navier_stokes/ns_V1e-3_N5000_T50.mat'
+        data_reader = MatReader(data_path)
+        data = data_reader.read_field('u')
+        data = data.permute(0, 3, 1, 2)          # new shape: (number of samples, n_temporal, n_spatial, n_spatial)
+        # # TODO: remember to change this
+        # n_train = 5
+        # n_test = 2
+        # args.batch_size = 2
+        # args.epochs = 2
+        # data_path = path_base + 'data/navier_stokes/ns_solution_subset_v1e-3_T50.pt'
+        # data = torch.load(data_path)           # shape: (number of samples, n_temporal, n_spatial, n_spatial). Each sample is w(t, x, y) values for discretized grid
+        # data = data.permute(0, 3, 1, 2)        # new shape: (number of samples, n_temporal, n_spatial, n_spatial)
+    elif args.viscosity == 1e-4:
+        n_spatial = 64      # spatial grid size
+        n_temporal = 30     # temporal grid size    # NOTE: cane be increased to 50 (or reduced further)
+        # n_train = 8000                              # can also reduce this
+        # n_test = 2000
+
+        data_path = path_base + 'data/navier_stokes/ns_V1e-4_N10000_T30.mat'
+        data_reader = MatReader(data_path)
+        data = data_reader.read_field('u')
+        data = data.permute(0, 3, 1, 2)
+        data = data[:, :n_temporal, :, :]       # new shape: (number of samples, n_temporal, n_spatial, n_spatial)
+    elif args.viscosity == 1e-5:
+        n_spatial = 64      # spatial grid size
+        n_temporal = 20     # temporal grid size
+        # n_train = 1000
+        # n_test = 200
+
+        data_path = path_base + 'data/navier_stokes/NavierStokes_V1e-5_N1200_T20.mat'
+        data_reader = MatReader(data_path)
+        data = data_reader.read_field('u')
+        data = data.permute(0, 3, 1, 2)         # new shape: (number of samples, n_temporal, n_spatial, n_spatial)
+    else:
+        raise ValueError('Invalid viscosity')
+
+    x_data = data[:, 0:1, :, :]               # shape: (number of samples, 1, n_spatial, n_spatial). Each sample is w(0, x, y) values for discretized grid
+    y_data = data[:, :, :, :]                 # shape: (number of samples, n_temporal, n_spatial, n_spatial). Each sample is w(t, x, y) values for discretized grid
+
+    x_data = x_data.repeat([1, n_temporal, 1, 1])     # shape: (number of samples, n_temporal, n_spatial, n_spatial)
+
+    # add positional encoding (i.e. x, y and t coordinates) to the input data
+    grid_x_1d = torch.tensor(np.linspace(0, 1, n_spatial + 1)[:-1], dtype=torch.float)
+    grid_y_1d = torch.tensor(np.linspace(0, 1, n_spatial + 1)[:-1], dtype=torch.float)
+    gridt_1d = torch.tensor(np.linspace(1, n_temporal, n_temporal), dtype=torch.float)
+
+    n_samples = x_data.shape[0]
+    grid_x = grid_x_1d.reshape(1, 1, 1, n_spatial, 1).repeat([n_samples, 1, n_temporal, 1, n_spatial])
+    grid_y = grid_y_1d.reshape(1, 1, 1, 1, n_spatial).repeat([n_samples, 1, n_temporal, n_spatial, 1])
+    gridt = gridt_1d.reshape(1, 1, n_temporal, 1, 1).repeat([n_samples, 1, 1, n_spatial, n_spatial])
+
+    x_data = x_data.unsqueeze(1)                                    # add channel dim. shape: (number of samples, 1, n_temporal, n_spatial, n_spatial)
+    x_data = torch.cat([x_data, grid_x, grid_y, gridt], dim=1)      # shape: (number of samples, 4, n_temporal, n_spatial, n_spatial)
+
+    x_train = x_data[:args.n_train]        
+    y_train = y_data[:args.n_train]
+    x_test = x_data[-args.n_test:]
+    y_test = y_data[-args.n_test:]        
+
+    train_loader = torch.utils.data.DataLoader(DatasetPerSampleConstraints(x_train, y_train), batch_size=args.batch_size, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(DatasetPerSampleConstraints(x_test, y_test), batch_size=args.batch_size, shuffle=False)
+
+    model = FNO(
+        n_modes=(args.n_modes, args.n_modes, args.n_modes), 
+        hidden_channels=args.hidden_channels, 
+        in_channels=4, 
+        out_channels=1, 
+        lifting_channels=False,
+        projection_channels=args.projection_channels, 
+        n_layers=args.n_layers)
+    
+    model = model.to(device)
+    
+    constrained_fno = ConstrainedFNO_NavierStokes_PerSampleConstraints(model, args.n_train, grid_x_1d, grid_y_1d, gridt_1d, args)
+
+    optimizers = {'primal_optimizer': 'Adam',
+                  'use_primal_lr_scheduler': args.use_primal_lr_scheduler,
+                'dual_optimizer': 'Adam',
+                'use_dual_lr_scheduler': args.use_dual_lr_scheduler}
+    
+    solver = SimultaneousPrimalDual(
+        csl_problem=constrained_fno,
+        optimizers=optimizers,
+        primal_lr=args.lr_primal,
+        dual_lr=args.lr_dual,
+        epochs=args.epochs,
+        eval_every=args.eval_every,
+        train_dataloader=train_loader,
+        test_dataloader=test_loader,
+    )
+    
+    solver.solve(constrained_fno)
+
+    # relative L2 error on test
+    final_test_error = eval_model_per_sample_constraints(model, test_loader, device)
+    test_errors = solver.state_dict['Relative_L2_test_error']
+
+    print()
+    print('-------Training complete-------')
+    print('Final relative L2 error on test set: ', final_test_error)
+    print('Best relative L2 error on test set: ', min(test_errors))
+    print('Epoch with lowest relative L2 error on test set: ', test_errors.index(min(test_errors)) * args.eval_every)
+    print()
+
+    # print final diagnostics
+    print('Final diagnostics:')
+    num_dual_variables = len(constrained_fno.lambdas)
+    for i in range(num_dual_variables):
+        print(f'Dual variable {i}: ', solver.state_dict['dual_variables'][f'dual_variable_{i}'][-1])
+        print(f'Slack_{i}: ', solver.state_dict['slacks'][f'slack_{i}'][-1])
+    print('Approximate duality gap: ', solver.state_dict['approximate_duality_gap'][-1])
+    print('Approximate relative duality gap: ', solver.state_dict['aproximate_relative_duality_gap'][-1])
+    print('Lagrangian: ', solver.state_dict['Lagrangian'][-1])
+    print('Primal value: ', solver.state_dict['primal_value'][-1])
+    print()
+
+    # save 
+    if args.constrained_problem_formulation == 'interior_data_with_per_sample_pde':
+        name = 'per_sample_pde_constrained_fno_interior_data'
+    elif args.constrained_problem_formulation == 'boundary_data_with_per_sample_pde': 
+        name = 'per_sample_pde_constrained_fno_boundary_data'
+    elif args.constrained_problem_formulation == 'per_sample_data':
+        name = 'per_sample_data_constrained_fno'
+    else:
+        name = 'fno'
+
+    path_save = f'saved/navier_stokes/{name}/{date_time_string}'
+
+    if not os.path.exists(path_save):
+        os.makedirs(path_save)
+
+    if args.plot_diagnostics:
+        solver.plot(path_save)
+    
+    # TODO: visualize solution
+
+    if args.save_model:
+        torch.save(model.state_dict(), path_save + '/model.pt')
+
+    # save arguments
+    with open(f'{path_save}/args.txt', 'w') as file:
+        for key, value in vars(args).items():
+            file.write(f'{key}: {value}\n')
+        
+        # save error metrics
+        file.write(f'Best relative L2 error: {min(test_errors)}\n')
+        file.write(f'Final relative L2 error: {final_test_error}\n')
+
+    # save state dict
+    with open(f'{path_save}/state_dict.pkl', 'wb') as f:
+        pickle.dump(solver.state_dict, f)
+
+    # close logger
+    wandb.finish()
+
+if __name__ == '__main__':
+    import time
+    start = time.time()
+    main()
+    print('Time taken:', time.time() - start)
+    print('Done!')
