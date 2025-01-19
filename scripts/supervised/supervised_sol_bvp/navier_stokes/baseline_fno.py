@@ -1,7 +1,5 @@
-# FNO baseline for Navier Stokes
-# TODO: Is padding required? IN PINO, they do 0.125 precentadge padding and in FNO, they pad with size 6 (all one one side) for the time dimension and nothing for otehr dimensions
-# TODO: Potentially use padding for Burgers and Darcy as well
-# To pad, use pad ration with 0 for all dimenions not to be badded
+# Baseline FNO (PII in paper) for Navier Stokes equaation. 
+# We consider three different viscosities: 1e-3, 1e-4 and 1e-5.
 
 import sys
 import os
@@ -9,31 +7,21 @@ import argparse
 from datetime import datetime
 
 sys.path.append('.')
-sys.path.append('/home/gridsan/vmoro/CSL/csl_neuraloperator')
-sys.path.append('/home/hk-project-test-p0021798/st_ac144859/csl_neuraloperator')
 
 import torch
 import wandb
 
-from csl_neuraloperator.utils import *
-from csl_neuraloperator.neuraloperator.neuralop.models import FNO
-from csl_neuraloperator.pde_losses import NavierStokesPDE_Loss
+from scl.supervised.utils import *
+from scl.supervised.neuraloperator.neuralop.models import FNO
 
-parser = argparse.ArgumentParser(description='FNO for Navier Stokes in worticity form')
+parser = argparse.ArgumentParser(description='Baseline FNO')
 
 parser.add_argument('--seed', type=int, default=0, help='Random initialization.')
 parser.add_argument('--epochs', type=int, default=500, help='Number of epochs to train for')
 parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 parser.add_argument('--batch_size', type=int, default=20, help='Batch size for training.')
 parser.add_argument('--use_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler.')
-
-parser.add_argument('--pde_loss_method', type=str, default='fdm_fourier_hybrid', help='Method used to compute the PDE loss/physics-informed loss (if the pde loss is used).')
 parser.add_argument('--viscosity', type=float, choices=[1e-3, 1e-4, 1e-5], default=1e-3, help='Viscosity of the fluid.')
-parser.add_argument('--data_loss_weight', type=float, default=1.0, help='Weight for the data loss.')
-parser.add_argument('--pde_loss_weight', type=float, default=0.0, help='Weight for the PDE loss.')
-parser.add_argument('--ic_loss_weight', type=float, default=0.0, help='Weight for the initial condition loss.')
-parser.add_argument('--bc_loss_weight', type=float, default=0.0, help='Weight for the boundary condition loss.')
-
 parser.add_argument('--n_train', type=int, default=1000, help='Number of training samples.')
 parser.add_argument('--n_test', type=int, default=200, help='Number of test samples.')
 
@@ -41,16 +29,12 @@ parser.add_argument('--n_modes', type=int, default=8, help='Number of Fourier mo
 parser.add_argument('--hidden_channels', type=int, default=64, help='Width of the FNO(i.e. number of channels)')  
 parser.add_argument('--projection_channels', type=int, default=128, help='Number of hidden channels of the projection back to the output')
 parser.add_argument('--n_layers', type=int, default=8, help='Number of Fourier layers to use.')
-# parser.add_argument('--n_modes', type=int, default=8, help='Number of Fourier modes to use.')
-# parser.add_argument('--hidden_channels', type=int, default=20, help='Width of the FNO(i.e. number of channels)')
-# parser.add_argument('--projection_channels', type=int, default=128, help='Number of hidden channels of the projection back to the output')
-# parser.add_argument('--n_layers', type=int, default=4, help='Number of Fourier layers to use.')
 
 parser.add_argument('--save_model', default=True)
 parser.add_argument('--eval_every', type=int, default=1, help='Evaluate the model every n epochs.')
 parser.add_argument('--visualize', default=False, help='Visualize the solution and prediction of the model.')
-parser.add_argument('--wandb_project_name', type=str, default='csl_neuraloperator')   
-parser.add_argument('--wandb_run_name', type=str, default='fno_ns_baseline')
+parser.add_argument('--wandb_project_name', type=str, default='scl_supervised')   
+parser.add_argument('--wandb_run_name', type=str, default='baseline_fno_navier_stokes')
 parser.add_argument('--run_location', choices=['locally', 'supercloud', 'horeka'], default='locally', help='Choose where the script is executed.')
 
 
@@ -87,31 +71,29 @@ def main():
         entity="viggomoro",
         config=config
         )
+    
+    # # TODO: remember to change this
+    # n_train = 5
+    # n_test = 2
+    # args.batch_size = 2
+    # args.epochs = 2
 
     # load data
     if args.viscosity == 1e-3:
         n_spatial = 64      # spatial grid size
         n_temporal = 50     # temporal grid size
         
-        # n_train = 1000      # TODO: can also use all 5000 samples if needed
-        # n_test = 200
         data_path = path_base + 'data/navier_stokes/ns_V1e-3_N5000_T50.mat'
         data_reader = MatReader(data_path)
         data = data_reader.read_field('u')
         data = data.permute(0, 3, 1, 2)          # new shape: (number of samples, n_temporal, n_spatial, n_spatial)
-        # # TODO: remember to change this
-        # n_train = 5
-        # n_test = 2
-        # args.batch_size = 2
-        # args.epochs = 2
+
         # data_path = path_base + 'data/navier_stokes/ns_solution_subset_v1e-3_T50.pt'
         # data = torch.load(data_path)           # shape: (number of samples, n_temporal, n_spatial, n_spatial). Each sample is w(t, x, y) values for discretized grid
         # data = data.permute(0, 3, 1, 2)        # new shape: (number of samples, n_temporal, n_spatial, n_spatial)
     elif args.viscosity == 1e-4:
         n_spatial = 64      # spatial grid size
         n_temporal = 30     # temporal grid size    # NOTE: cane be increased to 50 (or reduced further)
-        # n_train = 8000                              # can also reduce this
-        # n_test = 2000
 
         data_path = path_base + 'data/navier_stokes/ns_V1e-4_N10000_T30.mat'
         data_reader = MatReader(data_path)
@@ -121,8 +103,6 @@ def main():
     elif args.viscosity == 1e-5:
         n_spatial = 64      # spatial grid size
         n_temporal = 20     # temporal grid size
-        # n_train = 1000
-        # n_test = 200
 
         data_path = path_base + 'data/navier_stokes/NavierStokes_V1e-5_N1200_T20.mat'
         data_reader = MatReader(data_path)
@@ -131,49 +111,7 @@ def main():
     else:
         raise ValueError('Invalid viscosity')
 
-    # # OPTION 1: Use firtst T_in time steps to predict next T_out time steps -----------------
-    # T_in = 10
-    # T_out = 40
-
-    # x_data = data[:, :T_in, :, :]               # shape: (number of samples, T_in, n_spatial, n_spatial)
-    # y_data = data[:, T_in:T_in+T_out, :, :]     # shape: (number of samples, T_out, n_spatial, n_spatial)
-
-    # # NOTE: dimension with T_in is the channel dimension
-    # n_samples = x_data.shape[0]
-    # x_data = x_data.reshape(n_samples, T_in, 1, n_spatial, n_spatial).repeat([1, 1, T_out, 1, 1])     # shape: (number of samples, T_in, T_out, n_spatial, n_spatial)
-    
-    # # add positional encoding (i.e. x, y and t coordinates) to the input data
-    # grid_x_1d = torch.tensor(np.linspace(0, 1, n_spatial + 1)[:-1], dtype=torch.float)
-    # grid_y_1d = torch.tensor(np.linspace(0, 1, n_spatial + 1)[:-1], dtype=torch.float)
-    # gridt_1d = torch.tensor(np.linspace(0, 1, T_out), dtype=torch.float)
-
-    # grid_x = grid_x_1d.reshape(1, 1, 1, n_spatial, 1).repeat([n_samples, 1, T_out, 1, n_spatial])
-    # grid_y = grid_y_1d.reshape(1, 1, 1, 1, n_spatial).repeat([n_samples, 1, T_out, n_spatial, 1])
-    # gridt = gridt_1d.reshape(1, 1, T_out, 1, 1).repeat([n_samples, 1, 1, n_spatial, n_spatial])
-
-    # x_data = torch.cat([x_data, grid_x, grid_y, gridt], dim=1)      # shape: (number of samples, T_in+3, n_spatial, n_spatial, T_out)
-
-    # x_train = x_data[:n_train]        
-    # y_train = y_data[:n_train]       
-    # x_test = x_data[-n_test:]
-    # y_test = y_data[-n_test:]
-
-    # train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(x_train, y_train), batch_size=args.batch_size, shuffle=True)
-    # test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(x_test, y_test), batch_size=args.batch_size, shuffle=False)
-
-    # model = FNO(
-    #     n_modes=(8, 8, 8), 
-    #     hidden_channels=20, 
-    #     in_channels=T_in+3, 
-    #     out_channels=1, 
-    #     lifting_channels=False,
-    #     projection_channels=args.projection_channels, 
-    #     n_layers=4)
-    
-    # model = model.to(device)
-
-
-    # OPTION 2: Use the first time step to predict all other time steps -----------------
+    # use the first time step to predict all other time steps
     x_data = data[:, 0:1, :, :]               # shape: (number of samples, 1, n_spatial, n_spatial). Each sample is w(0, x, y) values for discretized grid
     y_data = data[:, :, :, :]                 # shape: (number of samples, n_temporal, n_spatial, n_spatial). Each sample is w(t, x, y) values for discretized grid
 
@@ -200,14 +138,6 @@ def main():
     train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(x_train, y_train), batch_size=args.batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(x_test, y_test), batch_size=args.batch_size, shuffle=False)
 
-    # model = FNO(
-    #     n_modes=(8, 8, 8), 
-    #     hidden_channels=64, 
-    #     in_channels=4, 
-    #     out_channels=1, 
-    #     lifting_channels=False,
-    #     projection_channels=args.projection_channels, 
-    #     n_layers=8)
     model = FNO(
         n_modes=(args.n_modes, args.n_modes, args.n_modes), 
         hidden_channels=args.hidden_channels, 
@@ -221,7 +151,6 @@ def main():
     model = model.to(device)
     
     relative_L2_loss_fn = LpLoss()
-    pde_loss_fn = NavierStokesPDE_Loss(args.viscosity, grid_x_1d, grid_y_1d, gridt_1d, method=args.pde_loss_method)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     if args.use_lr_scheduler:
@@ -238,34 +167,16 @@ def main():
             y_pred = model(x).squeeze(1)
 
             # loss
-            data_loss = pde_loss = ic_loss = bc_loss = 0
-
-            if args.data_loss_weight > 0:
-                data_loss = relative_L2_loss_fn(y_pred, y)
-            
-            if args.pde_loss_weight > 0:
-                pde_loss = pde_loss_fn(y_pred)
-            
-            if args.ic_loss_weight > 0:
-                ic_gt = y[:, 0, :, :]
-                ic_pred = y_pred[:, 0, :, :]
-                ic_loss = relative_L2_loss_fn(ic_pred, ic_gt)
-            
-            if args.bc_loss_weight > 0:
-                bc_pred = get_bc_2d(y_pred)
-                bc_gt = get_bc_2d(y)
-                bc_loss = relative_L2_loss_fn(bc_pred, bc_gt)
-
-            total_loss = args.data_loss_weight * data_loss + args.pde_loss_weight * pde_loss + args.ic_loss_weight * ic_loss + args.bc_loss_weight * bc_loss
+            data_loss = relative_L2_loss_fn(y_pred, y)
 
             # backward pass
             optimizer.zero_grad()
-            total_loss.backward()
+            data_loss.backward()
             optimizer.step()
 
             # log
             mini_batch_idx = (e * len(train_loader) + i)
-            to_log = {'Loss/training loss': total_loss.item(), 'Loss/Mini batch index': mini_batch_idx, 'Loss/Epoch': e}
+            to_log = {'Loss/training loss': data_loss.item(), 'Loss/Mini batch index': mini_batch_idx, 'Loss/Epoch': e}
             wandb.log(to_log)
 
         if args.use_lr_scheduler:
@@ -293,16 +204,11 @@ def main():
     print()
 
     # save
-    if args.pde_loss_weight > 0:
-        name = 'physics_informed_fno_baseline'
-    else:
-        name = 'fno_baseline'
+    name = 'baseline_fno'
     path_save = f'saved/navier_stokes/{name}/{date_time_string}/' 
 
     if not os.path.exists(path_save):
         os.makedirs(path_save)
-
-    # TODO: visualize solution
 
     if args.save_model:
         torch.save(model.state_dict(), path_save + 'model.pt')
