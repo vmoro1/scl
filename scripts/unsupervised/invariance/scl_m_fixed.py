@@ -16,7 +16,7 @@ from scl.unsupervised.csl_problem import ConstrainedStatisticalLearningProblem
 from scl.unsupervised.solver import SimultaneousPrimalDual
 from scl.unsupervised.model import MLP
 
-from scl.scl.unsupervised.generate_data.generate_data_convection_rd import *
+from scl.unsupervised.generate_data.generate_data_convection_rd import *
 from scl.unsupervised.utils import set_seed
 from scl.unsupervised.visualize.visualize_solution_convection_rd import *
 

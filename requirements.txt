@@ -1,9 +1,9 @@
-conda create --name scl python=3.11
-
-pip install torch==2.5.0 torchvision==0.20.0 torchaudio==2.5.0
-
-matpotlib
+numpy
+scipy
+matplotlib
 wandb
 h5py
-scipy
-numpy
+tensorly-torch
+tensorly
+opt-einsum
+torch-harmonics

@@ -16,7 +16,7 @@ import torch
 from scl.unsupervised.model import MLP
 
 from scl.scl.unsupervised.generate_data.generate_data_convection_rd import *
-from scl.unsupervised.utils import set_seed
+from scl.unsupervised.utils import *
 from scl.unsupervised.visualize.visualize_solution_convection_rd import *
 
 parser = argparse.ArgumentParser(description='Baseline parametric solution')
