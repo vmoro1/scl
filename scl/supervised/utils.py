@@ -144,25 +144,3 @@ def eval_model_per_sample_constraints(model, data_loader, device):
 
     test_error = loss_fn(y_pred_store, y_target_store).item()
     return test_error
-
-
-# NOTE: The below functions for getting the points on the spatial boundary assumes the temporal domain (if it exists)
-# comes before the spatial domain, i.e. that the shape of the tensor is (n_samples, n_temporal, n_spatial).
-def get_bc_1d(y):
-    """Get points on the spatial boundary of the domain for 1 spatial dimension."""
-    bc_lower = y[..., 0]
-    bc_upper = y[..., -1]
-    bc_pounts = torch.cat([bc_lower, bc_upper], dim=-1)
-    return bc_pounts
-
-def get_bc_2d(y):
-    """Get points on the spatial boundary of the domain for 2 spatial dimensions."""
-    bc_left = y[..., :, 0]
-    bc_right = y[..., :, -1]
-    bc_top = y[..., 0, :]
-    bc_bottom = y[..., -1, :]
-
-    bc_points = torch.cat([bc_left, bc_right, bc_top, bc_bottom], dim=-1)
-    return bc_points
-
-

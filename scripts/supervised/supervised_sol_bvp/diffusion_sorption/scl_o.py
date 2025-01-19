@@ -14,9 +14,9 @@ sys.path.append('.')
 import torch
 import wandb
 
-from scl.supervised.per_sample_constraints.csl_problem import ConstrainedStatisticalLearningProblem
-from scl.supervised.per_sample_constraints.solver import SimultaneousPrimalDual
-from scl.supervised.per_sample_constraints.dataset import DatasetPerSampleConstraints
+from scl.scl.supervised.csl_problem import ConstrainedStatisticalLearningProblem
+from scl.scl.supervised.solver import SimultaneousPrimalDual
+from scl.scl.supervised.dataset import DatasetPerSampleConstraints
 from scl.supervised.neuraloperator.neuralop.models import FNO
 from scl.supervised.utils import *
 

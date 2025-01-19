@@ -4,3 +4,6 @@ pip install torch==2.5.0 torchvision==0.20.0 torchaudio==2.5.0
 
 matpotlib
 wandb
+h5py
+scipy
+numpy

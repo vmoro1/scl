@@ -1,13 +1,16 @@
+# Solver class for solving constrained statistical learning problems with average constraints as well as per sample constraints.
+
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import wandb
 
-from supervised.utils import eval_model
+from supervised.utils import eval_model_per_sample_constraints
 
 
 class PrimalDualBaseSolver:
-    """Primal dual algorithm for solving constrained statistical learning problems."""
+    """Primal dual algorithm for solving constrained statistical learning 
+    problems with average constrains as well as per sample constraints."""
     
     def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, train_dataloader, test_dataloader):
         self.primal_lr = primal_lr
@@ -17,10 +20,11 @@ class PrimalDualBaseSolver:
         self.train_dataloader = train_dataloader
         self.test_dataloader = test_dataloader
         self.device = csl_problem.device
+        self.n_train_samples = len(train_dataloader.dataset)
 
         # optimizers
         self.primal_optimizer = getattr(torch.optim, optimizers['dual_optimizer'])(csl_problem.model.parameters(), lr=primal_lr)
-        self.dual_optimizer = getattr(torch.optim, optimizers['dual_optimizer'])(csl_problem.lambdas, lr=dual_lr)
+        self.dual_optimizer = getattr(torch.optim, optimizers['dual_optimizer'])(csl_problem.lambdas + csl_problem.mus, lr=dual_lr)
 
         # lr schedulers
         if optimizers['use_primal_lr_scheduler']:
@@ -36,12 +40,17 @@ class PrimalDualBaseSolver:
             self.use_dual_lr_scheduler = False
 
         # initialize state dict to keep track of quantities of interest
-        self.initialize_state_dict(len(csl_problem.lambdas))
+        self.initialize_state_dict(len(csl_problem.lambdas), len(csl_problem.mus))
 
-    def initialize_state_dict(self, num_dual_variables):
+    def initialize_state_dict(self, num_dual_variables, num_per_sample_constraints):
         self.state_dict = {}
+
         self.state_dict['dual_variables'] = {f'dual_variable_{i}': [] for i in range(num_dual_variables)}
         self.state_dict['slacks'] = {f'slack_{i}': [] for i in range(num_dual_variables)}
+
+        self.state_dict['per_sample_dual_variables'] = {f'per_sample_dual_variables_{i}': [] for i in range(num_per_sample_constraints)}
+        self.state_dict['per_sample_slacks'] = {f'per_sample_slacks_{i}': [] for i in range(num_per_sample_constraints)}
+
         self.state_dict['primal_value'] = []
         self.state_dict['Lagrangian'] = []
         self.state_dict['approximate_duality_gap'] = []
@@ -51,23 +60,23 @@ class PrimalDualBaseSolver:
     def primal_dual_update(self, csl_problem):
         """Update primal and dual variables"""
         raise NotImplementedError
-    
+
     def solve(self, csl_problem):
         """Solve constrained learning problem"""
 
         for e in range(self.epochs):
             csl_problem.model.train()
-            n_batches = len(self.train_dataloader)
-            for i, (x, y) in enumerate(self.train_dataloader):
-                x, y = x.to(self.device), y.to(self.device)
-                logging_dict = self.primal_dual_update(csl_problem, x, y)
 
-                # log qunataties of interest
-                if i == (n_batches - 1):
-                    evaluate_model = True
-                else:
-                    evaluate_model = False
-                self.diagnostics(csl_problem, logging_dict, e, evaluate_model)
+            # estimates for quantities of interest
+            log_dict = {
+                'L': 0, 
+                'primal_value': 0, 
+                'slacks': [torch.tensor(0, dtype=torch.float, device=self.device) for _ in csl_problem.rhs], 
+                'per_sample_slacks': [torch.zeros_like(per_sample_rhs, dtype=torch.float, device=self.device) for per_sample_rhs in csl_problem.per_sample_rhs]}   
+            
+            for samples_idx, x, y in self.train_dataloader:
+                samples_idx, x, y = samples_idx.to(self.device), x.to(self.device), y.to(self.device)
+                log_dict = self.primal_dual_update(csl_problem, samples_idx, x, y, log_dict)
 
             # update learning rate
             if self.use_primal_lr_scheduler:
@@ -75,24 +84,28 @@ class PrimalDualBaseSolver:
             if self.use_dual_lr_scheduler:
                 self.dual_lr_scheduler.step()
 
-    def diagnostics(self, csl_problem, logging_dict, epoch, evaluate_model):
+            # log
+            self.diagnostics(csl_problem, log_dict, e)
+    
+    def diagnostics(self, csl_problem, log_dict, epoch):
         """Log qunatities of intrest"""
 
-        L = logging_dict['L']
-        primal_value = logging_dict['primal_value']
-        slacks = logging_dict['slacks']
+        L = log_dict['L'].item()
+        primal_value = log_dict['primal_value'].item()
+        slacks = [slack.item() for slack in log_dict['slacks']]
+        per_sample_slacks = [per_sample_slack.detach().to('cpu') for per_sample_slack in log_dict['per_sample_slacks']]
 
-        approx_duality_gap = (primal_value - L).item()
-        approx_relative_duality_gap = approx_duality_gap / primal_value.item()
+        approx_duality_gap = (primal_value - L)
+        approx_relative_duality_gap = approx_duality_gap / primal_value
 
         dual_variables = [lambda_.item() for lambda_ in csl_problem.lambdas]
-        slacks = [slack.item() for slack in slacks]
+        per_sample_dual_variables = [mu.detach().to('cpu') for mu in csl_problem.mus]
 
         # dict for logging to wandb
         to_log_wandb = {}
 
-        if epoch % self.eval_every == 0 and evaluate_model:
-            test_error = eval_model(csl_problem.model, self.test_dataloader, self.device)
+        if epoch % self.eval_every == 0:
+            test_error = eval_model_per_sample_constraints(csl_problem.model, self.test_dataloader, self.device)
             self.state_dict['Relative_L2_test_error'].append(test_error)
             to_log_wandb['Relative L2 test error/Relative L2 test error'] = test_error
             to_log_wandb['Relative L2 test error/Epoch'] = epoch
@@ -103,30 +116,33 @@ class PrimalDualBaseSolver:
         for i in range(len(dual_variables)):
             self.state_dict['dual_variables'][f'dual_variable_{i}'].append(dual_variables[i])
             self.state_dict['slacks'][f'slack_{i}'].append(slacks[i])
+            
             to_log_wandb[f'Dual variables/Dual variable {i}'] = dual_variables[i]
             to_log_wandb[f'Slacks/Slack {i}'] = slacks[i]
 
+        for i in range(len(per_sample_dual_variables)):
+            self.state_dict['per_sample_dual_variables'][f'per_sample_dual_variables_{i}'].append(per_sample_dual_variables[i])
+            self.state_dict['per_sample_slacks'][f'per_sample_slacks_{i}'].append(per_sample_slacks[i])
+
         self.state_dict['approximate_duality_gap'].append(approx_duality_gap)
         self.state_dict['aproximate_relative_duality_gap'].append(approx_relative_duality_gap)
-        self.state_dict['primal_value'].append(primal_value.item())
-        self.state_dict['Lagrangian'].append(L.item())
+        self.state_dict['primal_value'].append(primal_value)
+        self.state_dict['Lagrangian'].append(L)
+
         to_log_wandb['Duality gap/Approximate duality gap'] = approx_duality_gap
         to_log_wandb['Duality gap/Approximate relative duality gap'] = approx_relative_duality_gap
-        to_log_wandb['Other diagnostics/Primal value'] = primal_value.item()
-        to_log_wandb['Other diagnostics/Lagrangian'] = L.item()
+        to_log_wandb['Other diagnostics/Primal value'] = primal_value
+        to_log_wandb['Other diagnostics/Lagrangian'] = L
 
         to_log_wandb['epoch'] = epoch
 
         # log wandb
         wandb.log(to_log_wandb)
 
-        csl_problem.model.train()
-
     def plot(self, path_save):
         """Plot diagnostics"""
         num_dual_variables = len(self.state_dict['dual_variables'])
-        num_batches = len(self.train_dataloader)
-        epochs = np.repeat(np.arange(self.epochs) + 1, num_batches)     # done since we log each batch
+        epochs = np.arange(self.epochs) + 1 
         epochs_eval = np.arange(0, self.epochs, self.eval_every) + 1
 
         # plot dual variables
@@ -151,17 +167,18 @@ class PrimalDualBaseSolver:
             plt.savefig(f'{path_save}/slack_{i}.pdf', format='pdf', bbox_inches='tight')
             plt.close()
 
-        # plot all dual variables in one plot
-        plt.figure()
-        for i in range(num_dual_variables):
-            plt.plot(epochs, self.state_dict['dual_variables'][f'dual_variable_{i}'], label=f'Dual variable {i}')
-        plt.title('Evoluation of dual variables')
-        plt.xlabel('Epochs')
-        plt.ylabel('Dual variables')
-        plt.legend(frameon=True, loc='best', fontsize=12)
-        plt.grid(True)
-        plt.savefig(f'{path_save}/dual_variables.pdf', format='pdf', bbox_inches='tight')
-        plt.close()
+        # plot all dual variables in one plot (if more than one dual variable is present)
+        if num_dual_variables > 1:
+            plt.figure()
+            for i in range(num_dual_variables):
+                plt.plot(epochs, self.state_dict['dual_variables'][f'dual_variable_{i}'], label=f'Dual variable {i}')
+            plt.title('Evoluation of dual variables')
+            plt.xlabel('Epochs')
+            plt.ylabel('Dual variables')
+            plt.legend(frameon=True, loc='best', fontsize=12)
+            plt.grid(True)
+            plt.savefig(f'{path_save}/dual_variables.pdf', format='pdf', bbox_inches='tight')
+            plt.close()
 
         # plot approximate duality gap
         plt.figure()
@@ -206,46 +223,6 @@ class PrimalDualBaseSolver:
         plt.close()
 
 
-class PrimalThenDual(PrimalDualBaseSolver):
-    """Updates the primal vairables first and then the dual variables"""
-
-    def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, train_dataloader, test_dataloader):
-        super().__init__(csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, train_dataloader, test_dataloader)
-        
-    def primal_dual_update(self, csl_problem, x, y):
-        """Update primal and dual variables for one batch."""
-
-        # make prediction and store it together with target as attribute of csl_problem
-        # Since objective and consrtaints both use the prediction, this is done so that only one forward pass is required
-        csl_problem.forward(x)
-        csl_problem.store_targets(y)
-
-        # primal update
-        self.primal_optimizer.zero_grad()
-        L, objective_value, _ = csl_problem.evaluate_lagrangian()
-        L.backward()
-        self.primal_optimizer.step()
-
-        # dual update
-        # NOTE: The Lagrangian is a concave function of the dual variables so we know the gradient and don't need to compute it
-        self.dual_optimizer.zero_grad()
-        slacks = csl_problem.evaluate_constraints_slacks()
-        for i, slack in enumerate(slacks):
-            csl_problem.lambdas[i].grad = -slack
-        self.dual_optimizer.step()
-
-        # project dual variables onto the non-negative orthant
-        # this is required by the definition of the dual variable
-        for i in range(len(csl_problem.lambdas)):
-            csl_problem.lambdas[i][csl_problem.lambdas[i] < 0] = 0
-
-        # discard stored prediction and target
-        csl_problem.reset()
-
-        logging_dict = {'L': L, 'primal_value': objective_value, 'slacks': slacks}
-        return logging_dict
-
-
 class SimultaneousPrimalDual(PrimalDualBaseSolver):
     """Updates the primal and dual variales simultaneously (instead of primal first).
     This saves one call to evaluate the constraints which can be expensive."""
@@ -253,21 +230,28 @@ class SimultaneousPrimalDual(PrimalDualBaseSolver):
     def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, train_dataloader, test_dataloader):
         super().__init__(csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, train_dataloader, test_dataloader)
 
-    def primal_dual_update(self, csl_problem, x, y):
+    def primal_dual_update(self, csl_problem, samples_idx, x, y, log_dict):
 
         self.primal_optimizer.zero_grad()
         self.dual_optimizer.zero_grad()
 
         csl_problem.forward(x)
-        csl_problem.store_targets(y)
+        csl_problem.store_targets_and_samples_idx(samples_idx, y)
 
         # primal update
-        L, objective_value, slacks = csl_problem.evaluate_lagrangian()
+        L, objective_value, slacks, per_sample_slacks = csl_problem.evaluate_lagrangian()
         L.backward()
 
         # dual update
+        # for average constraints
         for i, slack in enumerate(slacks):
             csl_problem.lambdas[i].grad = -slack
+
+        # for per sample constraints
+        for i, per_sample_slack in enumerate(per_sample_slacks):
+            expanded_per_sample_slack = torch.zeros_like(csl_problem.mus[i])
+            expanded_per_sample_slack[samples_idx] = per_sample_slack
+            csl_problem.mus[i].grad = -expanded_per_sample_slack
         
         self.primal_optimizer.step()
         self.dual_optimizer.step()
@@ -275,9 +259,19 @@ class SimultaneousPrimalDual(PrimalDualBaseSolver):
         # project dual variables onto the non-negative orthant
         for i in range(len(csl_problem.lambdas)):
             csl_problem.lambdas[i][csl_problem.lambdas[i] < 0] = 0
+        for i in range(len(csl_problem.mus)):
+            csl_problem.mus[i][csl_problem.mus[i] < 0] = 0
 
         # discard stored prediction and target
         csl_problem.reset()
 
-        logging_dict = {'L': L, 'primal_value': objective_value, 'slacks': slacks}
-        return logging_dict
+        batch_size = x.shape[0]
+        log_dict['L'] += batch_size * L / self.n_train_samples
+        log_dict['primal_value'] += batch_size * objective_value / self.n_train_samples
+        for i, slack in enumerate(slacks):
+            log_dict['slacks'][i] += batch_size * slack / self.n_train_samples
+        for i, per_sample_slack in enumerate(per_sample_slacks):
+            log_dict['per_sample_slacks'][i][samples_idx] = per_sample_slack
+
+        return log_dict
+    
