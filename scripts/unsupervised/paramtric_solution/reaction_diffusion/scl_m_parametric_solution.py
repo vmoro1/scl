@@ -26,9 +26,9 @@ from scl.unsupervised.model import MLP
 
 from scl.unsupervised.langevin_monte_carlo import *
 from scl.unsupervised.metropolis_hastings import *
-from scl.scl.unsupervised.generate_data.generate_data_convection_rd import *
+from scl.unsupervised.generate_data.generate_data_convection_rd import *
 from scl.unsupervised.utils import set_seed
-from scl.unsupervised.visualize.visualize_solution_convection_rd import *
+from scl.unsupervised.visualize_solution import *
 
 
 parser = argparse.ArgumentParser(description='SCL(M) for parametric solution')
@@ -418,9 +418,10 @@ def main():
             exact_solution_pde_param = data_test[pde_param]['exact_solution']
             u_exact_1d_pde_param = data_test[pde_param]['u_exact_1d']
 
-            exact_u(exact_solution_pde_param, x, t, path=path_save, suffix=f'_{pde_param}')
-            u_diff(exact_solution_pde_param, u_pred_pde_param, x, t, path=path_save, suffix=f'_{pde_param}')
-            u_predict(u_exact_1d_pde_param, u_pred_pde_param, x, t, path=path_save, suffix=f'_{pde_param}')
+            plot_exact_u(exact_solution_pde_param, x, t, path=path_save, label_x='x', label_y='t', suffix=f'_{pde_param}', flip_axis_plotting=True)
+            plot_u_diff(exact_solution_pde_param, u_pred_pde_param, x, t, path=path_save, label_x='x', label_y='t', suffix=f'_{pde_param}', flip_axis_plotting=True)
+            plot_u_pred(u_exact_1d_pde_param, u_pred_pde_param, x, t, path=path_save, label_x='x', label_y='t', suffix=f'_{pde_param}', flip_axis_plotting=True)
+    
 
 
     # save arguments

@@ -15,9 +15,9 @@ import torch
 
 from scl.unsupervised.model import MLP
 
-from scl.scl.unsupervised.generate_data.generate_data_convection_rd import *
+from scl.unsupervised.generate_data.generate_data_convection_rd import *
 from scl.unsupervised.utils import *
-from scl.unsupervised.visualize.visualize_solution_convection_rd import *
+from scl.unsupervised.visualize_solution import *
 
 parser = argparse.ArgumentParser(description='Baseline parametric solution')
 
@@ -284,9 +284,9 @@ def main():
             exact_solution_beta = data_test[beta]['exact_solution']
             u_exact_1d_beta = data_test[beta]['u_exact_1d']
 
-            exact_u(exact_solution_beta, x, t, path=path_save, suffix=f'_{beta}')
-            u_diff(exact_solution_beta, u_pred_beta, x, t, path=path_save, suffix=f'_{beta}')
-            u_predict(u_exact_1d_beta, u_pred_beta, x, t, path=path_save, suffix=f'_{beta}')
+            plot_exact_u(exact_solution_beta, x, t, path=path_save, label_x='x', label_y='t', suffix=f'_{beta}', flip_axis_plotting=True)
+            plot_u_diff(exact_solution_beta, u_pred_beta, x, t, path=path_save, label_x='x', label_y='t', suffix=f'_{beta}', flip_axis_plotting=True)
+            plot_u_pred(u_exact_1d_beta, u_pred_beta, x, t, path=path_save, label_x='x', label_y='t',suffix=f'_{beta}', flip_axis_plotting=True)
     
     # save arguments
     with open(f'{path_save}/args.txt', 'a') as file:

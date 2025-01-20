@@ -1,24 +1,43 @@
-# Visualize teh solution of the Eikonal equation.
+# Visualize the solution of the PDEs.
+
+# NOTE: This script plots 2D PDE solutions and assumes that the rows correspond to the 
+# y-axis and the columns to the x-axis with [0,0] corresponding to the origin. However, 
+# it can also be used to plot spatio-temporal PDEs where the time (t) takes the role of 
+# y (even though all labels say y these are in fact t when this is done).
 
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
-def plot_exact_u(u_exact, x, y, path, suffix=""):
-    """Visualize exact solution."""
+def plot_exact_u(u_exact, x, y, path, label_x, label_y, suffix="", flip_axis_plotting=False, cmap='rainbow'):
+    """Visualize exact solution. flip_axis_plotting is used to flip the axis.
+    label_x is label for x-vector and label_y is label for y-vector. These can
+    end up on either axis depending on flip_axis_plotting."""
     fig = plt.figure(figsize=(9, 5))
     ax = fig.add_subplot(111)
-    h = ax.imshow(u_exact.T, interpolation='nearest', cmap='coolwarm',
-                  extent=[y.min(), y.max(), x.min(), x.max()],
-                  origin='lower', aspect='auto')
+
+    if flip_axis_plotting==True:
+        # axis flipped via transpose
+        h = ax.imshow(u_exact.T, interpolation='nearest', cmap=cmap,
+                    extent=[y.min(), y.max(), x.min(), x.max()],
+                    origin='lower', aspect='auto')
+        
+        ax.set_xlabel(label_y, fontweight='bold', size=30)
+        ax.set_ylabel(label_x, fontweight='bold', size=30)
+    else:
+        h = ax.imshow(u_exact, interpolation='nearest', cmap=cmap,
+                    extent=[x.min(), x.max(), y.min(), y.max()],
+                    origin='lower', aspect='auto')
+        
+        ax.set_xlabel(label_x, fontweight='bold', size=30)
+        ax.set_ylabel(label_y, fontweight='bold', size=30)
+
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.10)
     cbar = fig.colorbar(h, cax=cax)
     cbar.ax.tick_params(labelsize=15)
 
-    ax.set_xlabel('y', fontweight='bold', size=30)
-    ax.set_ylabel('x', fontweight='bold', size=30)
     ax.legend(
         loc='upper center',
         bbox_to_anchor=(0.9, -0.05),
@@ -35,27 +54,32 @@ def plot_exact_u(u_exact, x, y, path, suffix=""):
     return None
 
 
-def plot_u_diff(u_exact, u_pred, x, y, path, relative_error=False, suffix=""):
+def plot_u_diff(u_exact, u_pred, x, y, path, label_x, label_y, suffix="", flip_axis_plotting=False):
     """Visualize abs(u_pred - u_exact)."""
-
     fig = plt.figure(figsize=(9, 5))
     ax = fig.add_subplot(111)
 
-    if relative_error:
-        h = ax.imshow(np.abs(u_exact.T - u_pred.T)/np.abs(u_exact.T), interpolation='nearest', cmap='binary',
-                    extent=[y.min(), y.max(), x.min(), x.max()],
-                    origin='lower', aspect='auto')
-    else:
+    if flip_axis_plotting==True:
+        # axis flipped via transpose
         h = ax.imshow(np.abs(u_exact.T - u_pred.T), interpolation='nearest', cmap='binary',
                     extent=[y.min(), y.max(), x.min(), x.max()],
                     origin='lower', aspect='auto')
+        
+        ax.set_xlabel(label_y, fontweight='bold', size=30)
+        ax.set_ylabel(label_x, fontweight='bold', size=30)
+    else:
+        h = ax.imshow(np.abs(u_exact - u_pred), interpolation='nearest', cmap='binary',
+                    extent=[x.min(), x.max(), y.min(), y.max()],
+                    origin='lower', aspect='auto')
+        
+        ax.set_xlabel(label_x, fontweight='bold', size=30)
+        ax.set_ylabel(label_y, fontweight='bold', size=30)
+
+    
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.10)
     cbar = fig.colorbar(h, cax=cax)
     cbar.ax.tick_params(labelsize=15)
-
-    ax.set_xlabel('y', fontweight='bold', size=30)
-    ax.set_ylabel('x', fontweight='bold', size=30)
 
     ax.legend(
         loc='upper center',
@@ -73,7 +97,7 @@ def plot_u_diff(u_exact, u_pred, x, y, path, relative_error=False, suffix=""):
     return None
 
 
-def plot_u_pred(u_exact, u_pred, x, y, path, suffix=""):
+def plot_u_pred(u_exact, u_pred, x, y, path, label_x, label_y, suffix="", flip_axis_plotting=False, cmap='rainbow'):
     """Visualize u_predicted."""
 
     fig = plt.figure(figsize=(9, 5))
@@ -83,19 +107,26 @@ def plot_u_pred(u_exact, u_pred, x, y, path, suffix=""):
     u_exact_max = u_exact.max()
 
     # colorbar for prediction: set min/max to ground truth solution.
-    h = ax.imshow(u_pred.T, interpolation='nearest', cmap='coolwarm',
-                  extent=[y.min(), y.max(), x.min(), x.max()],
-                  origin='lower', aspect='auto', vmin=u_exact_min, vmax=u_exact_max)
+    if flip_axis_plotting==True:
+        # axis flipped via transpose
+        h = ax.imshow(u_pred.T, interpolation='nearest', cmap=cmap,
+                    extent=[y.min(), y.max(), x.min(), x.max()],
+                    origin='lower', aspect='auto', vmin=u_exact_min, vmax=u_exact_max)
+        
+        ax.set_xlabel(label_y, fontweight='bold', size=30)
+        ax.set_ylabel(label_x, fontweight='bold', size=30)  
+    else:
+        h = ax.imshow(u_pred, interpolation='nearest', cmap=cmap,
+                    extent=[x.min(), x.max(), y.min(), y.max()],
+                    origin='lower', aspect='auto', vmin=u_exact_min, vmax=u_exact_max)
+        
+        ax.set_xlabel(label_x, fontweight='bold', size=30)
+        ax.set_ylabel(label_y, fontweight='bold', size=30)
     
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.10)
     cbar = fig.colorbar(h, cax=cax)
     cbar.ax.tick_params(labelsize=15)
-
-    line = np.linspace(x.min(), x.max(), 2)[:,None]
-
-    ax.set_xlabel('y', fontweight='bold', size=30)
-    ax.set_ylabel('x', fontweight='bold', size=30)
 
     ax.legend(
         loc='upper center',
@@ -111,7 +142,6 @@ def plot_u_pred(u_exact, u_pred, x, y, path, suffix=""):
     plt.close()
 
     return None
-
 
 
 # NOTE: Two diffuerent ways of plotting is used (they are all the same except for axis location and colormaps). 

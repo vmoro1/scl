@@ -12,9 +12,9 @@ import torch
 
 from scl.unsupervised.model import MLP
 
-from scl.scl.unsupervised.generate_data.generate_data_convection_rd import *
+from scl.unsupervised.generate_data.generate_data_convection_rd import *
 from scl.unsupervised.utils import set_seed
-from scl.unsupervised.visualize.visualize_solution_convection_rd import *
+from scl.unsupervised.visualize_solution import *
 
 parser = argparse.ArgumentParser(description='PINN baseline')
 
@@ -294,9 +294,11 @@ def main():
         if not os.path.exists(path_save):
             os.makedirs(path_save)
         u_pred = u_pred.reshape(len(t), len(x))
-        exact_u(exact_solution, x, t, path=path_save)
-        u_diff(exact_solution, u_pred, x, t, path=path_save)
-        u_predict(u_exact_1d, u_pred, x, t, path=path_save)
+
+        plot_exact_u(exact_solution, x, t, path=path_save, label_x='x', label_y='t', flip_axis_plotting=True)
+        plot_u_diff(exact_solution, u_pred, x, t, path=path_save, label_x='x', label_y='t', flip_axis_plotting=True)
+        plot_u_pred(u_exact_1d, u_pred, x, t, path=path_save, label_x='x', label_y='t', flip_axis_plotting=True)
+
 
     # save arguments
     with open(f'{path_save}/args.txt', 'w') as file:

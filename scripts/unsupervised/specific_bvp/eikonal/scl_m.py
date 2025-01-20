@@ -19,7 +19,7 @@ from scl.unsupervised.langevin_monte_carlo import *
 from scl.unsupervised.metropolis_hastings import *
 
 from scl.unsupervised.utils import *
-from scl.unsupervised.visualize.visualize_solution_eikonal import *
+from scl.unsupervised.visualize_solution import *
 from scl.unsupervised.generate_data.load_data_eikonal import load_eikonal_data
 
 parser = argparse.ArgumentParser(description='SCL(M)')
@@ -228,9 +228,9 @@ def main():
         if not os.path.exists(path_save):
             os.makedirs(path_save)
         u_pred = u_pred.reshape(len(y), len(x))
-        plot_exact_u(u_exact, x, y, path_save)
-        plot_u_diff(u_exact, u_pred, x, y, path_save)
-        plot_u_pred(u_exact, u_pred, x, y, path_save)
+        plot_exact_u(u_exact, x, y, path_save, label_x='x', label_y='y', flip_axis_plotting=False, cmap='coolwarm')
+        plot_u_diff(u_exact, u_pred, x, y, path_save, label_x='x', label_y='y', flip_axis_plotting=False)
+        plot_u_pred(u_exact, u_pred, x, y, path_save, label_x='x', label_y='y', flip_axis_plotting=False, cmap='coolwarm')
 
     if args.plot_diagnostics:
         if not os.path.exists(path_save):

@@ -19,9 +19,9 @@ import torch
 
 from scl.unsupervised.model import MLP
 
-from scl.scl.unsupervised.generate_data.generate_data_helmholtz import *
+from scl.unsupervised.generate_data.generate_data_helmholtz import *
 from scl.unsupervised.utils import *
-from scl.unsupervised.visualize.visualize_solution_helmholtz import *
+from scl.unsupervised.visualize_solution import *
 
 parser = argparse.ArgumentParser(description='PINN')
 
@@ -316,11 +316,12 @@ def main():
         for pde_param in data_test.keys():
             u_pred_pde_param = preds[pde_param]
             u_pred_pde_param = u_pred_pde_param.reshape(len(y), len(x))
-            u_exact = data_test[pde_param]['u_exact']
+            u_exact_pde_param = data_test[pde_param]['u_exact']
+            u_exact_1d_pde_param = data_test[pde_param]['u_exact_1d']
 
-            plot_exact_u(u_exact, x, y, path_save, suffix=f'_{pde_param}')
-            plot_u_diff(u_exact, u_pred_pde_param, x, y, path_save, suffix=f'_{pde_param}')
-            plot_u_pred(u_exact, u_pred_pde_param, x, y, path_save, suffix=f'_{pde_param}')
+            plot_exact_u(u_exact_pde_param, x, y, path_save, label_x='x', label_y='y', suffix=f'_{pde_param}', flip_axis_plotting=False)
+            plot_u_diff(u_exact_pde_param, u_pred_pde_param, x, y, path_save, label_x='x', label_y='y', suffix=f'_{pde_param}', flip_axis_plotting=False)
+            plot_u_pred(u_exact_1d_pde_param, u_pred_pde_param, x, y, path_save, label_x='x', label_y='y', suffix=f'_{pde_param}', flip_axis_plotting=False)
     
     # save arguments
     with open(f'{path_save}/args.txt', 'a') as file:

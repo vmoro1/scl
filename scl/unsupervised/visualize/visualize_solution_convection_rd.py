@@ -4,7 +4,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-import matplotlib.gridspec as gridspec
 
 
 def exact_u(Exact, x, t, path, suffix=""):
@@ -18,8 +17,6 @@ def exact_u(Exact, x, t, path, suffix=""):
     cax = divider.append_axes("right", size="5%", pad=0.10)
     cbar = fig.colorbar(h, cax=cax)
     cbar.ax.tick_params(labelsize=15)
-
-    line = np.linspace(x.min(), x.max(), 2)[:,None]
 
     ax.set_xlabel('t', fontweight='bold', size=30)
     ax.set_ylabel('x', fontweight='bold', size=30)
@@ -57,8 +54,6 @@ def u_diff(Exact, U_pred, x, t, path, relative_error = False, suffix=""):
     cax = divider.append_axes("right", size="5%", pad=0.10)
     cbar = fig.colorbar(h, cax=cax)
     cbar.ax.tick_params(labelsize=15)
-
-    line = np.linspace(x.min(), x.max(), 2)[:,None]
 
     ax.set_xlabel('t', fontweight='bold', size=30)
     ax.set_ylabel('x', fontweight='bold', size=30)

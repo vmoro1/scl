@@ -54,8 +54,6 @@ def plot_u_diff(u_exact, u_pred, x, y, path, relative_error=False, suffix=""):
     cbar = fig.colorbar(h, cax=cax)
     cbar.ax.tick_params(labelsize=15)
 
-    line = np.linspace(x.min(), x.max(), 2)[:,None]
-
     ax.set_xlabel('y', fontweight='bold', size=30)
     ax.set_ylabel('x', fontweight='bold', size=30)
 
