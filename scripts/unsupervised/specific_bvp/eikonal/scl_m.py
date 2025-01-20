@@ -156,8 +156,10 @@ class SCL_M(ConstrainedStatisticalLearningProblem):
         worst_case_loss = torch.mean(worst_case_loss)
         return worst_case_loss
     
-    def predict(self, X):
-        """Make predictions. Used during evaluation."""
+    def predict(self, X, dummy=None):
+        """Make predictions. Used during evaluation.
+        dummy=None is required to be able to use the same solver 
+        for solving specific BVPs and parametric solutions."""
         x = torch.tensor(X[:, 0:1], requires_grad=True).float().to(self.device)
         y = torch.tensor(X[:, 1:2], requires_grad=True).float().to(self.device)
 
@@ -198,7 +200,8 @@ def main():
                 'dual_optimizer': 'Adam',
                 'use_dual_lr_scheduler': args.use_dual_lr_scheduler}
     
-    solver = SimultaneousPrimalDual(constrained_pinn, optimizers, args.lr_primal, args.lr_dual, args.epochs, args.eval_every, X_test, u_exact_1d)
+    data_dict = {'Eikonal': {'X_test': X_test, 'u_exact': u_exact_1d}}      # data used for eval/test
+    solver = SimultaneousPrimalDual(constrained_pinn, optimizers, args.lr_primal, args.lr_dual, args.epochs, args.eval_every, data_dict)
 
     # solve constrained learning problem
     solver.solve(constrained_pinn)

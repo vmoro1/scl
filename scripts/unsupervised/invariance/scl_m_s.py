@@ -19,9 +19,9 @@ from scl.unsupervised.model import MLP
 
 from scl.unsupervised.langevin_monte_carlo import *
 from scl.unsupervised.metropolis_hastings import *
-from scl.scl.unsupervised.generate_data.generate_data_convection_rd import *
+from scl.unsupervised.generate_data.generate_data_convection_rd import *
 from scl.unsupervised.utils import set_seed
-from scl.unsupervised.visualize.visualize_solution_convection_rd import *
+from scl.unsupervised.visualize_solution import *
 
 
 parser = argparse.ArgumentParser(description='SCL(M+S)')
@@ -109,10 +109,10 @@ class SCL_M_S(ConstrainedStatisticalLearningProblem):
 
         # sample for psi_alpha (to evaluate worst-case loss)
         if args.use_mh_sampling:
-            if args.use_mh_projection:
-                # covariance matrix for the Gaussian proposal used in Metropolis-Hastings
-                covariance_matrix = torch.tensor([[args.sigma_x**2, args.sigma_xt], [args.sigma_xt, args.sigma_t**2]], device=device, dtype=torch.float32)
+            # covariance matrix for the Gaussian proposal used in Metropolis-Hastings
+            covariance_matrix = torch.tensor([[args.sigma_x**2, args.sigma_xt], [args.sigma_xt, args.sigma_t**2]], device=device, dtype=torch.float32)
 
+            if args.use_mh_projection:
                 self.sampler = MH_Projection_Gaussian_2D(self, domain_x, domain_t, args.steps, args.n_samples, self.invariance_loss_per_point, covariance_matrix, device, args.sampler_batch_size, args.causal)
             else:
                 self.sampler = MH_Gaussian_2D(self, domain_x, domain_t, args.steps, args.n_samples, self.invariance_loss_per_point, covariance_matrix, device, args.sampler_batch_size, args.causal)
@@ -293,7 +293,7 @@ class SCL_M_S(ConstrainedStatisticalLearningProblem):
         worst_case_loss = self.invariance_loss(x_adv, t_adv)
         return worst_case_loss
     
-    def predict(self, X):
+    def predict(self, X, dummy=None):
         """Make predictions. Used during evaluation."""
         x = torch.tensor(X[:, 0:1], requires_grad=True).float().to(self.device)
         t = torch.tensor(X[:, 1:2], requires_grad=True).float().to(self.device)
@@ -349,7 +349,8 @@ def main():
                 'dual_optimizer': 'Adam',
                 'use_dual_lr_scheduler': args.use_dual_lr_scheduler}
     
-    solver = SimultaneousPrimalDual(constrained_pinn, optimizers, args.lr_primal, args.lr_dual, args.epochs, args.eval_every, X_test, u_exact)
+    data_dict = {beta: {'X_test': X_test, 'u_exact': u_exact}}      # data used for eval/test
+    solver = SimultaneousPrimalDual(constrained_pinn, optimizers, args.lr_primal, args.lr_dual, args.epochs, args.eval_every, data_dict)
 
     # solve constrained learning problem
     solver.solve(constrained_pinn)
@@ -380,9 +381,9 @@ def main():
         if not os.path.exists(path_save):
             os.makedirs(path_save)
         u_pred = u_pred.reshape(len(t), len(x))
-        exact_u(exact_solution, x, t, path=path_save)
-        u_diff(exact_solution, u_pred, x, t, path=path_save)
-        u_predict(u_exact_1d, u_pred, x, t, path=path_save)
+        plot_exact_u(exact_solution, x, t, path=path_save, label_x='x', label_y='t', flip_axis_plotting=True)
+        plot_u_diff(exact_solution, u_pred, x, t, path=path_save, label_x='x', label_y='t', flip_axis_plotting=True)
+        plot_u_pred(u_exact_1d, u_pred, x, t, path=path_save, label_x='x', label_y='t', flip_axis_plotting=True)
 
     if args.plot_diagnostics:
         if not os.path.exists(path_save):

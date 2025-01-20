@@ -18,7 +18,7 @@ import numpy as np
 import torch
 
 from scl.unsupervised.csl_problem import ConstrainedStatisticalLearningProblem
-from scl.unsupervised.solver import SimultaneousPrimalDualParametricSolution
+from scl.unsupervised.solver import SimultaneousPrimalDual
 from scl.unsupervised.model import MLP
 
 from scl.unsupervised.langevin_monte_carlo import *
@@ -290,7 +290,7 @@ def main():
                 'dual_optimizer': 'Adam',
                 'use_dual_lr_scheduler': args.use_dual_lr_scheduler}
     
-    solver = SimultaneousPrimalDualParametricSolution(
+    solver = SimultaneousPrimalDual(
         constrained_pinn, 
         optimizers, 
         args.lr_primal, 
