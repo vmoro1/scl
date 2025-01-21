@@ -294,7 +294,9 @@ class SCL_M_S(ConstrainedStatisticalLearningProblem):
         return worst_case_loss
     
     def predict(self, X, dummy=None):
-        """Make predictions. Used during evaluation."""
+        """Make predictions. Used during evaluation.
+        dummy=None is required to be able to use the same solver 
+        for solving specific BVPs and parametric solutions."""
         x = torch.tensor(X[:, 0:1], requires_grad=True).float().to(self.device)
         t = torch.tensor(X[:, 1:2], requires_grad=True).float().to(self.device)
 

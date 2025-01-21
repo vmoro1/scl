@@ -225,9 +225,9 @@ def main():
     if args.use_lr_scheduler:
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5000, gamma=0.9)
 
-    rel_error = {f'Relative Error Beta={beta}': [] for beta in betas_test}
-    abs_error = {f'Absolute Error Beta={beta}': [] for beta in betas_test}
-    linf_error = {f'L_inf Error Beta={beta}': [] for beta in betas_test}
+    rel_error = {f'Relative Error PDE Parameter: {pde_param}': [] for pde_param in betas_test}
+    abs_error = {f'Absolute Error PDE Parameter: {pde_param}': [] for pde_param in betas_test}
+    linf_error = {f'L_inf Error PDE Parameter: {pde_param}': [] for pde_param in betas_test}
 
     model.train()
     for e in range(args.epochs):
@@ -250,9 +250,9 @@ def main():
                 error_u_abs = np.mean(np.abs(u_exact - u_pred))
                 error_u_linf = np.linalg.norm(u_exact - u_pred, np.inf) / np.linalg.norm(u_exact, np.inf)
 
-                rel_error[f'Relative Error Beta={beta}'].append(error_u_relative)
-                abs_error[f'Absolute Error Beta={beta}'].append(error_u_abs)
-                linf_error[f'L_inf Error Beta={beta}'].append(error_u_linf)
+                rel_error[f'Relative Error PDE Parameter: {beta}'].append(error_u_relative)
+                abs_error[f'Absolute Error PDE Parameter: {beta}'].append(error_u_abs)
+                linf_error[f'L_inf Error PDE Parameter: {beta}'].append(error_u_linf)
 
     # make predictions
     preds = {}

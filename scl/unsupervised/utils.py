@@ -54,43 +54,111 @@ def plot_errors(rel_error, abs_error, linf_error, epochs, eval_every, path_save)
     plt.close()   
 
 
-def plot_errors_parametric_solution(rel_error, abs_error, linf_error, epochs, eval_every, betas, path_save):
+# def plot_errors_parametric_solution(rel_error, abs_error, linf_error, epochs, eval_every, betas, path_save):
+#     epochs_eval = np.arange(0, epochs, eval_every) + 1
+#     for beta in betas:
+#         # plot Relative Error
+#         plt.figure()
+#         plt.plot(epochs_eval, rel_error[f'Relative Error Beta={beta}'], color='blue')
+#         plt.title(f'Relative Error for beta={beta}')
+#         plt.xlabel('Epochs')
+#         plt.ylabel('Relative Error')
+#         plt.grid(True)
+#         plt.savefig(f'{path_save}/relative_error_beta_{beta}.pdf', format='pdf', bbox_inches='tight')
+#         plt.close()
+
+#         # plot Absolute Error
+#         plt.figure()
+#         plt.plot(epochs_eval, abs_error[f'Absolute Error Beta={beta}'], color='blue')
+#         plt.title(f'Absolute Error for beta={beta}')
+#         plt.xlabel('Epochs')
+#         plt.ylabel('Absolute Error')
+#         plt.grid(True)
+#         plt.savefig(f'{path_save}/absolute_error_beta_{beta}.pdf', format='pdf', bbox_inches='tight')
+#         plt.close()
+
+#         # plot Linf Error
+#         plt.figure()
+#         plt.plot(epochs_eval, linf_error[f'L_inf Error Beta={beta}'], color='blue')
+#         plt.title(f'linf Error for beta={beta}')
+#         plt.xlabel('Epochs')
+#         plt.ylabel('linf Error')
+#         plt.grid(True)
+#         plt.savefig(f'{path_save}/linf_error_beta_{beta}.pdf', format='pdf', bbox_inches='tight')
+#         plt.close()
+
+#     # plot all errors in one plot
+#     plt.figure()
+#     for beta in betas:
+#         plt.plot(epochs_eval, rel_error[f'Relative Error Beta={beta}'], label=f'Relative Error Beta={beta}')
+#     plt.title('Relative Error')
+#     plt.xlabel('Epochs')
+#     plt.ylabel('Relative Error')
+#     plt.legend(frameon=True, loc='best', fontsize=12)
+#     plt.grid(True)
+#     plt.savefig(f'{path_save}/relative_error.pdf', format='pdf', bbox_inches='tight')
+#     plt.close()
+    
+#     plt.figure()
+#     for beta in betas:
+#         plt.plot(epochs_eval, abs_error[f'Absolute Error Beta={beta}'], label=f'Absolute Error Beta={beta}')
+#     plt.title('Absolute Error')
+#     plt.xlabel('Epochs')
+#     plt.ylabel('Absolute Error')
+#     plt.legend(frameon=True, loc='best', fontsize=12)
+#     plt.grid(True)
+#     plt.savefig(f'{path_save}/absolute_error.pdf', format='pdf', bbox_inches='tight')
+#     plt.close()
+
+#     plt.figure()
+#     for beta in betas:
+#         plt.plot(epochs_eval, linf_error[f'L_inf Error Beta={beta}'], label=f'linf Error Beta={beta}')
+#     plt.title('linf Error')
+#     plt.xlabel('Epochs')
+#     plt.ylabel('linf Error')
+#     plt.legend(frameon=True, loc='best', fontsize=12)
+#     plt.grid(True)
+#     plt.savefig(f'{path_save}/linf_error.pdf', format='pdf', bbox_inches='tight')
+#     plt.close()   
+
+
+def plot_errors_parametric_solution(rel_error, abs_error, linf_error, epochs, eval_every, pde_params, path_save):
     epochs_eval = np.arange(0, epochs, eval_every) + 1
-    for beta in betas:
+    for pde_param in pde_params:
         # plot Relative Error
         plt.figure()
-        plt.plot(epochs_eval, rel_error[f'Relative Error Beta={beta}'], color='blue')
-        plt.title(f'Relative Error for beta={beta}')
+        plt.plot(epochs_eval, rel_error[f'Relative Error PDE Parameter: {pde_param}'], color='blue')
+        plt.title(f'Relative Error for PDE Parameter: {pde_param}')
         plt.xlabel('Epochs')
         plt.ylabel('Relative Error')
         plt.grid(True)
-        plt.savefig(f'{path_save}/relative_error_beta_{beta}.pdf', format='pdf', bbox_inches='tight')
+        plt.savefig(f'{path_save}/relative_error_pde_param_{pde_param}.pdf', format='pdf', bbox_inches='tight')
         plt.close()
 
         # plot Absolute Error
         plt.figure()
-        plt.plot(epochs_eval, abs_error[f'Absolute Error Beta={beta}'], color='blue')
-        plt.title(f'Absolute Error for beta={beta}')
+        plt.plot(epochs_eval, abs_error[f'Absolute Error PDE Parameter: {pde_param}'], color='blue')
+        plt.title(f'Absolute Error for PDE Parameter: {pde_param}')
         plt.xlabel('Epochs')
         plt.ylabel('Absolute Error')
         plt.grid(True)
-        plt.savefig(f'{path_save}/absolute_error_beta_{beta}.pdf', format='pdf', bbox_inches='tight')
+        plt.savefig(f'{path_save}/absolute_error_pde_param_{pde_param}.pdf', format='pdf', bbox_inches='tight')
         plt.close()
 
         # plot Linf Error
         plt.figure()
-        plt.plot(epochs_eval, linf_error[f'linf Error Beta={beta}'], color='blue')
-        plt.title(f'linf Error for beta={beta}')
+        plt.plot(epochs_eval, linf_error[f'L_inf Error PDE Parameter: {pde_param}'], color='blue')
+        plt.title(f'linf Error for PDE Parameter: {pde_param}')
         plt.xlabel('Epochs')
         plt.ylabel('linf Error')
         plt.grid(True)
-        plt.savefig(f'{path_save}/linf_error_beta_{beta}.pdf', format='pdf', bbox_inches='tight')
+        plt.savefig(f'{path_save}/linf_error_pde_param_{pde_param}.pdf', format='pdf', bbox_inches='tight')
         plt.close()
 
     # plot all errors in one plot
     plt.figure()
-    for beta in betas:
-        plt.plot(epochs_eval, rel_error[f'Relative Error Beta={beta}'], label=f'Relative Error Beta={beta}')
+    for pde_param in pde_params:
+        plt.plot(epochs_eval, rel_error[f'Relative Error PDE Parameter: {pde_param}'], label=f'Relative Error PDE Parameter: {pde_param}')
     plt.title('Relative Error')
     plt.xlabel('Epochs')
     plt.ylabel('Relative Error')
@@ -100,8 +168,8 @@ def plot_errors_parametric_solution(rel_error, abs_error, linf_error, epochs, ev
     plt.close()
     
     plt.figure()
-    for beta in betas:
-        plt.plot(epochs_eval, abs_error[f'Absolute Error Beta={beta}'], label=f'Absolute Error Beta={beta}')
+    for pde_param in pde_params:
+        plt.plot(epochs_eval, abs_error[f'Absolute Error PDE Parameter: {pde_param}'], label=f'Absolute Error PDE Parameter: {pde_param}')
     plt.title('Absolute Error')
     plt.xlabel('Epochs')
     plt.ylabel('Absolute Error')
@@ -111,12 +179,12 @@ def plot_errors_parametric_solution(rel_error, abs_error, linf_error, epochs, ev
     plt.close()
 
     plt.figure()
-    for beta in betas:
-        plt.plot(epochs_eval, linf_error[f'linf Error Beta={beta}'], label=f'linf Error Beta={beta}')
+    for pde_param in pde_params:
+        plt.plot(epochs_eval, linf_error[f'L_inf Error PDE Parameter: {pde_param}'], label=f'linf Error PDE Parameter: {pde_param}')
     plt.title('linf Error')
     plt.xlabel('Epochs')
     plt.ylabel('linf Error')
     plt.legend(frameon=True, loc='best', fontsize=12)
     plt.grid(True)
     plt.savefig(f'{path_save}/linf_error.pdf', format='pdf', bbox_inches='tight')
-    plt.close()   
+    plt.close()

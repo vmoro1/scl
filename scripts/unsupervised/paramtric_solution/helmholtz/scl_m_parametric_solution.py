@@ -36,7 +36,7 @@ parser = argparse.ArgumentParser(description='SCL(M) for parametric solution')
 
 parser.add_argument('--seed', type=int, default=0, help='Random initialization.')
 parser.add_argument('--num_collocation_pts', type=int, default=1000, help='Number of collocation points.')
-parser.add_argument('--epochs', type=int, default=10, help='Number of epochs to train for.')   
+parser.add_argument('--epochs', type=int, default=100000, help='Number of epochs to train for.')   
 parser.add_argument('--lr_primal', type=float, default=1e-3, help='Learning rate for primal variables (NN parameters).')
 parser.add_argument('--lr_dual', type=float, default=1e-4, help='Learning rate for dual variables (lambdas).')
 parser.add_argument('--eps', nargs='+', default=[1e-1], help='Tolerances for the constraints.')
@@ -183,9 +183,8 @@ class SCL_M_ParametricSolution(ConstrainedStatisticalLearningProblem):
                 + (self.k ** 2) * torch.sin(a1 * math.pi * x) * torch.sin(a2 * math.pi * y)
         return q
     
-    def bc_loss_per_pde_param(self, pde_param):
-        a1 = pde_param[:, 0:1]
-        a2 = pde_param[:, 1:2]
+    def bc_loss_per_pde_param(self, a1, a2):
+        pde_param = torch.cat([a1, a2], dim=1)
         bc_u = generate_bc(self.nx, self.ny, a1, a2)
 
         # expand first dim of boundary tensors based on number of pde params
@@ -200,7 +199,7 @@ class SCL_M_ParametricSolution(ConstrainedStatisticalLearningProblem):
     def worst_case_bc_loss(self):
         pde_params_adv = self.sampler_bc()
         self.samples_BC.append(pde_params_adv)
-        worst_case_loss = self.bc_loss_per_pde_param(pde_params_adv)
+        worst_case_loss = self.bc_loss_per_pde_param(pde_params_adv[:,0:1], pde_params_adv[:,1:2])
         worst_case_loss = torch.mean(worst_case_loss)
         return worst_case_loss
     

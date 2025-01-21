@@ -230,8 +230,10 @@ class SCL_M_Fixed(ConstrainedStatisticalLearningProblem):
         loss_pde = torch.mean(residual_pde ** 2)
         return loss_pde
     
-    def predict(self, X):
-        """Make predictions. Used during evaluation."""
+    def predict(self, X, dummy=None):
+        """Make predictions. Used during evaluation.
+        dummy=None is required to be able to use the same solver 
+        for solving specific BVPs and parametric solutions."""
         x = torch.tensor(X[:, 0:1], requires_grad=True).float().to(self.device)
         t = torch.tensor(X[:, 1:2], requires_grad=True).float().to(self.device)
 
@@ -286,7 +288,8 @@ def main():
                 'dual_optimizer': 'Adam',
                 'use_dual_lr_scheduler': args.use_dual_lr_scheduler}
     
-    solver = SimultaneousPrimalDual(constrained_pinn, optimizers, args.lr_primal, args.lr_dual, args.epochs, args.eval_every, X_test, u_exact)
+    data_dict = {beta: {'X_test': X_test, 'u_exact': u_exact}}      # data used for eval/test
+    solver = SimultaneousPrimalDual(constrained_pinn, optimizers, args.lr_primal, args.lr_dual, args.epochs, args.eval_every, data_dict)
 
     # solve constrained learning problem
     solver.solve(constrained_pinn)

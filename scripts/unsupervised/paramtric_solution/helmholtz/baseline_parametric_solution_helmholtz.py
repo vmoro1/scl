@@ -28,7 +28,7 @@ parser = argparse.ArgumentParser(description='PINN')
 parser.add_argument('--seed', type=int, default=0, help='Random initialization.')
 parser.add_argument('--num_collocation_pts', type=int, default=1000, help='Number of collocation points.')
 parser.add_argument('--fixed_collocation_pts', action=argparse.BooleanOptionalAction, default=False, help='Whether to use fixed collocation points or sample new ones at each epoch.')
-parser.add_argument('--epochs', type=int, default=200, help='Number of epochs to train for.')
+parser.add_argument('--epochs', type=int, default=100000, help='Number of epochs to train for.')
 parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
 parser.add_argument('--use_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler.')
 parser.add_argument('--data_loss_weight', type=float, default=1.0, help='Weight for the data loss.')
@@ -261,7 +261,7 @@ def main():
 
     rel_error = {f'Relative Error PDE Parameter: {pde_param}': [] for pde_param in pde_params_test}
     abs_error = {f'Absolute Error PDE Parameter: {pde_param}': [] for pde_param in pde_params_test}
-    linf_error = {f'linf Error PDE Parameter: {pde_param}': [] for pde_param in pde_params_test}
+    linf_error = {f'L_inf Error PDE Parameter: {pde_param}': [] for pde_param in pde_params_test}
 
     model.train()
     for e in range(args.epochs):
@@ -286,7 +286,7 @@ def main():
 
                 rel_error[f'Relative Error PDE Parameter: {pde_param}'].append(error_u_relative)
                 abs_error[f'Absolute Error PDE Parameter: {pde_param}'].append(error_u_abs)
-                linf_error[f'linf Error PDE Parameter: {pde_param}'].append(error_u_linf)
+                linf_error[f'L_inf Error PDE Parameter: {pde_param}'].append(error_u_linf)
 
     # make predictions
     preds = {}
@@ -342,7 +342,7 @@ def main():
         print('Test metrics:')
         print('Relative error: %e' % (error_u_relative))
         print('Absolute error: %e' % (error_u_abs))
-        print('linf error: %e' % (error_u_linf))
+        print('L_inf error: %e' % (error_u_linf))
         print('')
         
         with open(f'{path_save}/args.txt', 'a') as file:
@@ -350,10 +350,10 @@ def main():
             file.write('Test metrics:\n')
             file.write(f'Relative error: {error_u_relative}\n')
             file.write(f'Absolute error: {error_u_abs}\n')
-            file.write(f'linf error: {error_u_linf}\n')
+            file.write(f'L_inf error: {error_u_linf}\n')
 
     # plot errors
-    plot_errors(rel_error, abs_error, linf_error, args.epochs, args.eval_every, pde_params_test, path_save)
+    plot_errors_parametric_solution(rel_error, abs_error, linf_error, args.epochs, args.eval_every, pde_params_test, path_save)
 
     # # save relative error
     # np.save(f'{path_save}/relative_error.npy', rel_error)

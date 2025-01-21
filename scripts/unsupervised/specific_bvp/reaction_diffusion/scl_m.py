@@ -288,7 +288,7 @@ def main():
                 'use_dual_lr_scheduler': args.use_dual_lr_scheduler}
     
     data_dict = {(nu, rho): {'X_test': X_test, 'u_exact': u_exact}}      # data used for eval/test
-    solver = SimultaneousPrimalDual(constrained_pinn, optimizers, args.lr_primal, args.lr_dual, args.epochs, args.recompute, args.eval_every, data_dict)
+    solver = SimultaneousPrimalDual(constrained_pinn, optimizers, args.lr_primal, args.lr_dual, args.epochs, args.eval_every, data_dict)
 
     # solve constrained learning problem
     solver.solve(constrained_pinn)
