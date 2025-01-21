@@ -2,6 +2,9 @@
 # Fixed collocation points are used (i.e., no worst-case PDE loss/stochastic collocation points)
 #  and the structural (invariance) constraint is incorporated as a worst-case loss.
 
+# NOTE: In association with the worst case loss we sometimes use adversarial (or adv) as part of variable names 
+# (e.g., refering to the samples as samples_adv) du to the connection between worst-case and adversarial optimization.
+
 import sys
 import os
 import argparse

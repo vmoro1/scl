@@ -33,7 +33,7 @@ parser.add_argument('--data_loss_weight', type=float, default=1.0, help='Weight 
 parser.add_argument('--num_x_pts', type=int, default=256, help='Number of points in the x grid.')
 parser.add_argument('--num_t_pts', type=int, default=100, help='Number of points in the time grid.')
 parser.add_argument('--betas_train', nargs='+', default=[1.0, 2.5, 5.0], help='betas for training.')
-parser.add_argument('--betas_test', nargs='+', default=[1, 2.5, 5], help='betas for testing.')
+parser.add_argument('--betas_test', nargs='+', default=[1, 2, 4, 5], help='betas for testing.')
 
 parser.add_argument('--u0_str', default='sin(x)', help='str argument for initial condition if no forcing term.')
 parser.add_argument('--source', default=0, type=float, help="If there's a source term, define it here. For now, just constant force terms.")

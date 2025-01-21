@@ -6,6 +6,9 @@
 # sampling for the PDE samples (x,t,nu,rho) and the sampling for teh data loss only samples nu,rho. IT is very easy to do 
 # the data loss for the 3D case as well.
 
+# NOTE: In association with the worst case loss we sometimes use adversarial (or adv) as part of variable names 
+# (e.g., refering to the samples as samples_adv) du to the connection between worst-case and adversarial optimization.
+
 # TODO: If it doesn't work, revert to prevoius specific MH sampler
 
 import sys

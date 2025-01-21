@@ -38,8 +38,8 @@ parser.add_argument('--nx', type=int, default=256, help='Number of points in the
 parser.add_argument('--ny', type=int, default=256, help='Number of points in the y grid.')
 parser.add_argument('--a1_train', nargs='+', default=[1.0, 1.5, 2.0], help='a1 used for training.')
 parser.add_argument('--a2_train', nargs='+', default=[1.0, 1.5, 2.0], help='a2 used for training.')
-parser.add_argument('--a1_test', nargs='+', default=[1.0, 1.5, 2.0], help='a1 for testing after training.')
-parser.add_argument('--a2_test', nargs='+', default=[1.0, 1.25, 1.5, 1.75, 2.0], help='a2 for testing after training.')
+parser.add_argument('--a1_test', nargs='+', default=[1.0, 1.25, 1.75], help='a1 for testing after training.')
+parser.add_argument('--a2_test', nargs='+', default=[1.0, 1.25, 175], help='a2 for testing after training.')
 parser.add_argument('--k', type=float, default=1, help='k value for the Helmholtz PDE.')
 
 parser.add_argument('--visualize', action=argparse.BooleanOptionalAction, default=True, help='Visualize the solution and prediction of the model.')
