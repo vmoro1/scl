@@ -70,20 +70,17 @@ def main():
         config=config
         )
 
-    # TODO: remember to change this
-    # n_train = 1000
-    # n_test = 200
-    # n_train = 4
-    # n_test = 2
+    # # TODO: remember to change this
+    # args.n_train = 4
+    # args.n_test = 2
     # args.batch_size = 2
     # args.epochs = 2
 
     # load data
-
     nx = 128    # spatial grid size
     nt = 101    # temporal grid size
 
-    data_path = path_base + 'data/burgers_eq/burgers_pino.mat'
+    data_path = path_base + 'data/supervised/burgers_eq/burgers_pino.mat'
     data_reader = MatReader(data_path)
     viscosity_coeff = data_reader.read_field('visc').item()    # viscosity coefficient of PDE
     x_data = data_reader.read_field('input')                   # shape: (number of samples, nx). Each sample is u(0, x) values for discretized grid

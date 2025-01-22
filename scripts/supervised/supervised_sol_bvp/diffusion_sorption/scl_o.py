@@ -14,9 +14,9 @@ sys.path.append('.')
 import torch
 import wandb
 
-from scl.scl.supervised.csl_problem import ConstrainedStatisticalLearningProblem
-from scl.scl.supervised.solver import SimultaneousPrimalDual
-from scl.scl.supervised.dataset import DatasetPerSampleConstraints
+from scl.supervised.csl_problem import ConstrainedStatisticalLearningProblem
+from scl.supervised.solver import SimultaneousPrimalDual
+from scl.supervised.dataset import DatasetPerSampleConstraints
 from scl.supervised.neuraloperator.neuralop.models import FNO
 from scl.supervised.utils import *
 
@@ -132,20 +132,17 @@ def main():
         config=config
         )
 
-    # TODO: remember to change this
-    # n_train = 8000
-    # n_test = 2000
-
-    # n_train = 2
-    # n_test = 2
+    # # TODO: remember to change this
+    # args.n_train = 2
+    # args.n_test = 2
     # args.batch_size = 2
-    # args.epochs = 1
+    # args.epochs = 2
 
     # load data
     nx = 1024           # spatial grid size
     nt = 101            # temporal grid size
 
-    data_path = path_base + 'data/diffusion_sorption/'
+    data_path = path_base + 'data/supervised/diffusion_sorption/'
     data = torch.load(data_path + 'solution.pt')        # shape: (number of samples, nt, nx). Each sample is the solution u(t, x) for discretized grid
     x_grid = torch.load(data_path + 'x_grid.pt')
     t_grid = torch.load(data_path + 't_grid.pt')

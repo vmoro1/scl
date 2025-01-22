@@ -15,9 +15,9 @@ sys.path.append('.')
 import torch
 import wandb
 
-from scl.scl.supervised.csl_problem import ConstrainedStatisticalLearningProblem
-from scl.scl.supervised.solver import SimultaneousPrimalDual
-from scl.scl.supervised.dataset import DatasetPerSampleConstraints
+from scl.supervised.csl_problem import ConstrainedStatisticalLearningProblem
+from scl.supervised.solver import SimultaneousPrimalDual
+from scl.supervised.dataset import DatasetPerSampleConstraints
 from scl.supervised.neuraloperator.neuralop.models import FNO
 from scl.supervised.utils import *
 
@@ -135,18 +135,18 @@ def main():
         config=config
         )
     
-    # # TODO: remember to change this
-    # n_train = 5
-    # n_test = 2
-    # args.batch_size = 2
-    # args.epochs = 2
+    # TODO: remember to change this
+    args.n_train = 4
+    args.n_test = 2
+    args.batch_size = 2
+    args.epochs = 2
 
     # load data - the first time step is used to predict all other time steps (including the first one)
     if args.viscosity == 1e-3:
         n_spatial = 64      # spatial grid size
         n_temporal = 50     # temporal grid size
         
-        data_path = path_base + 'data/navier_stokes/ns_V1e-3_N5000_T50.mat'
+        data_path = path_base + 'data/supervised/navier_stokes/ns_V1e-3_N5000_T50.mat'
         data_reader = MatReader(data_path)
         data = data_reader.read_field('u')
         data = data.permute(0, 3, 1, 2)          # new shape: (number of samples, n_temporal, n_spatial, n_spatial)
@@ -158,7 +158,7 @@ def main():
         n_spatial = 64      # spatial grid size
         n_temporal = 30     # temporal grid size    # NOTE: cane be increased to 50 (or reduced further)
 
-        data_path = path_base + 'data/navier_stokes/ns_V1e-4_N10000_T30.mat'
+        data_path = path_base + 'data/supervised/navier_stokes/ns_V1e-4_N10000_T30.mat'
         data_reader = MatReader(data_path)
         data = data_reader.read_field('u')
         data = data.permute(0, 3, 1, 2)
@@ -167,7 +167,7 @@ def main():
         n_spatial = 64      # spatial grid size
         n_temporal = 20     # temporal grid size
 
-        data_path = path_base + 'data/navier_stokes/NavierStokes_V1e-5_N1200_T20.mat'
+        data_path = path_base + 'data/supervised/navier_stokes/NavierStokes_V1e-5_N1200_T20.mat'
         data_reader = MatReader(data_path)
         data = data_reader.read_field('u')
         data = data.permute(0, 3, 1, 2)         # new shape: (number of samples, n_temporal, n_spatial, n_spatial)
@@ -211,7 +211,7 @@ def main():
     
     model = model.to(device)
     
-    scl_o = SCL_O(model, args.n_train, grid_x_1d, grid_y_1d, gridt_1d, args)
+    scl_o = SCL_O(model, args.n_train, args)
 
     optimizers = {'primal_optimizer': 'Adam',
                   'use_primal_lr_scheduler': args.use_primal_lr_scheduler,

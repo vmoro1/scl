@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import wandb
 
-from supervised.utils import eval_model_per_sample_constraints
+from scl.supervised.utils import eval_model_per_sample_constraints
 
 
 class PrimalDualBaseSolver:

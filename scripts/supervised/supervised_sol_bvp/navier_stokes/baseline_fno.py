@@ -73,17 +73,17 @@ def main():
         )
     
     # # TODO: remember to change this
-    # n_train = 5
-    # n_test = 2
-    # args.batch_size = 2
-    # args.epochs = 2
+    args.n_train = 4
+    args.n_test = 2
+    args.batch_size = 2
+    args.epochs = 2
 
     # load data
     if args.viscosity == 1e-3:
         n_spatial = 64      # spatial grid size
         n_temporal = 50     # temporal grid size
         
-        data_path = path_base + 'data/navier_stokes/ns_V1e-3_N5000_T50.mat'
+        data_path = path_base + 'data/supervised/navier_stokes/ns_V1e-3_N5000_T50.mat'
         data_reader = MatReader(data_path)
         data = data_reader.read_field('u')
         data = data.permute(0, 3, 1, 2)          # new shape: (number of samples, n_temporal, n_spatial, n_spatial)
@@ -95,7 +95,7 @@ def main():
         n_spatial = 64      # spatial grid size
         n_temporal = 30     # temporal grid size    # NOTE: cane be increased to 50 (or reduced further)
 
-        data_path = path_base + 'data/navier_stokes/ns_V1e-4_N10000_T30.mat'
+        data_path = path_base + 'data/supervised/navier_stokes/ns_V1e-4_N10000_T30.mat'
         data_reader = MatReader(data_path)
         data = data_reader.read_field('u')
         data = data.permute(0, 3, 1, 2)
@@ -104,7 +104,7 @@ def main():
         n_spatial = 64      # spatial grid size
         n_temporal = 20     # temporal grid size
 
-        data_path = path_base + 'data/navier_stokes/NavierStokes_V1e-5_N1200_T20.mat'
+        data_path = path_base + 'data/supervised/navier_stokes/NavierStokes_V1e-5_N1200_T20.mat'
         data_reader = MatReader(data_path)
         data = data_reader.read_field('u')
         data = data.permute(0, 3, 1, 2)         # new shape: (number of samples, n_temporal, n_spatial, n_spatial)
