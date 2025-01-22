@@ -109,9 +109,9 @@ def main():
     if args.run_location == 'locally':
         path_base = ""
     elif args.run_location == 'supercloud':
-        path_base = "/home/gridsan/vmoro/CSL/csl_neuraloperator/"
+        path_base = "/home/gridsan/vmoro/scl/"
     elif args.run_location == 'horeka':
-        path_base = "/home/hk-project-test-p0021798/st_ac144859/csl_neuraloperator/"
+        path_base = "/home/hk-project-test-p0021798/st_ac144859/scl/"
     else:
         raise ValueError('Invalid run location')
 
