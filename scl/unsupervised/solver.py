@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 class PrimalDualBase:
     """Primal dual algorithm for solving constrained statistical learning problems."""
-    def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, data_dict):
+    def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, data_dict, solving_specific_BVP=False, path_save=None):
         self.primal_lr = primal_lr
         self.dual_lr = dual_lr
         self.epochs = epochs
@@ -35,6 +35,12 @@ class PrimalDualBase:
 
         # initialize state dict to keep track of quantities of interest
         self.initialize_state_dict(len(csl_problem.lambdas))
+
+        # attributes for early stopping in diagnostics
+        self.solving_specific_BVP = solving_specific_BVP
+        self.best_primal_value = np.inf
+        self.path_save = path_save
+
 
     def initialize_state_dict(self, num_dual_variables):
         self.state_dict = {}
@@ -82,6 +88,27 @@ class PrimalDualBase:
 
         dual_variables = [lambda_.item() for lambda_ in csl_problem.lambdas]
         slacks = [slack.item() for slack in slacks]
+
+        # only do for solving specific BVP not parametric solution (only one entry in dict/one pde_param)
+        if self.solving_specific_BVP:   
+            # find best checkpoint based on feasibility (withing 1.1 eps but can be changed) plus small objective
+            # slacks already incorporate eps so it's only less than 0.1 eps
+            feasible = all(slack < 0.1 * eps for slack, eps in zip(slacks, csl_problem.rhs))
+            if primal_value.item() < self.best_primal_value and feasible:
+                self.best_epoch = epoch
+                self.best_primal_value = primal_value.item()
+                best_model = csl_problem.model
+                torch.save(best_model.state_dict(), f'{self.path_save}/best_model.pt') 
+
+                pde_param = list(self.data_dict.keys())[0]
+                X_test = self.data_dict[pde_param]['X_test']
+                u_pred = csl_problem.predict(X_test, pde_param)
+                try:
+                    u_exact = self.data_dict[pde_param]['u_exact']
+                except:
+                    u_exact = self.data_dict[pde_param]['u_exact_1d']
+
+                self.best_rel_l2_error = np.linalg.norm(u_exact-u_pred, 2)/np.linalg.norm(u_exact, 2)
 
         # evaluation of model
         if epoch % self.eval_every == 0:
@@ -259,8 +286,8 @@ class PrimalDualBase:
 class PrimalThenDual(PrimalDualBase):
     """Updates the primal vairables first and then the dual variables"""
     
-    def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, X_test, u_exact):
-        super().__init__(csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, X_test, u_exact)
+    def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, X_test, u_exact, solving_specific_BVP=False, path_save=None):
+        super().__init__(csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, X_test, u_exact, solving_specific_BVP, path_save)
 
     def primal_dual_update(self, csl_problem):
         """Update primal and dual variables"""
@@ -298,8 +325,8 @@ class SimultaneousPrimalDual(PrimalDualBase):
     """Updates the primal and dual variales simultaneously (instead of primal first).
     This saves one call to evaluate the constraints which can be expensive for e.g. advesarial losses"""
 
-    def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, data_dict):
-        super().__init__(csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, data_dict)
+    def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, data_dict, solving_specific_BVP=False, path_save=None):
+        super().__init__(csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, data_dict, solving_specific_BVP, path_save)
 
     def primal_dual_update(self, csl_problem):
 
