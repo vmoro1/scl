@@ -31,7 +31,8 @@ parser.add_argument('--num_collocation_pts', type=int, default=1000, help='Numbe
 parser.add_argument('--epochs', type=int, default=50000, help='Number of epochs to train for.')
 parser.add_argument('--lr_primal', type=float, default=1e-3, help='Learning rate for primal variables (NN parameters).')
 parser.add_argument('--lr_dual', type=float, default=1e-4, help='Learning rate for dual variables (lambdas).')
-parser.add_argument('--eps', nargs='+', default=[1e-3], help='Tolerances for the constraints.')
+# parser.add_argument('--eps', nargs='+', default=[1e-3], help='Tolerances for the constraints.')
+parser.add_argument('--eps', nargs='+', default=[1e-3, 1e-5], help='Tolerances for the constraints.')
 parser.add_argument('--use_primal_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler for the primal variables.')
 parser.add_argument('--use_dual_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler for the dual variables.')
 parser.add_argument('--lambda_init', nargs='+', default=[0.0], help='Initial value for the dual variables.')
@@ -87,9 +88,14 @@ class SCL_M(ConstrainedStatisticalLearningProblem):
             self.sampler = LMC_Gaussian(self, args.eta, args.T, domain_x, domain_y, args.steps, args.n_samples, self.pde_loss_per_point, device, args.sampler_batch_size)
 
         # define objective, constraints, and the right hand side of the constraints (i.e. the c in f(x) < c)
-        self.objective_function = self.data_loss
-        self.constraints = [self.worst_case_pde_loss]
-        self.rhs = eps  
+        # self.objective_function = self.data_loss
+        # self.constraints = [self.worst_case_pde_loss]
+        # self.rhs = eps  
+        
+        # with strucutral constraint
+        self.objective_function = self.ic_loss
+        self.constraints = [self.worst_case_pde_loss, self.bc_loss]
+        self.rhs = eps
 
         super().__init__()
 
@@ -132,6 +138,7 @@ class SCL_M(ConstrainedStatisticalLearningProblem):
         return loss_ic
 
     def bc_loss(self):
+        """Can also be viewed as structural constraint for the Eikonal equation to enforde the SDF to be non-negative on boundary."""
         u_pred = self.forward(self.x_bc, self.y_bc)
         loss_bc = (F.relu(-u_pred)).mean()  # Signed Distance Field (SDF) should be positive on boundary
         return loss_bc
