@@ -20,7 +20,9 @@ parser.add_argument('--epochs', type=int, default=500, help='Number of epochs to
 parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 parser.add_argument('--batch_size', type=int, default=20, help='Batch size for training.')
 parser.add_argument('--use_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler.')
-parser.add_argument('--n_train', type=int, default=1000, help='Number of training samples.')
+parser.add_argument('--n_train', type=int, default=800, help='Number of training samples.')
+parser.add_argument('--n_validation', type=int, default=200, help='Number of validation samples.')
+
 parser.add_argument('--n_test', type=int, default=200, help='Number of test samples.')
 
 parser.add_argument('--n_modes', type=int, default=16, help='Number of Fourier modes to use.')
@@ -72,6 +74,7 @@ def main():
 
     # # TODO: remember to change this
     # args.n_train = 4
+    # args.n_validation = 2
     # args.n_test = 2
     # args.batch_size = 2
     # args.epochs = 2
@@ -107,6 +110,8 @@ def main():
 
     x_train = x_data[:args.n_train]        
     y_train = y_data[:args.n_train]     
+    x_validation = x_data[args.n_train:args.n_train + args.n_validation]
+    y_validation = y_data[args.n_train:args.n_train + args.n_validation] 
     x_test = x_data[-args.n_test:]
     y_test = y_data[-args.n_test:]
 
@@ -124,6 +129,7 @@ def main():
     
 
     train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(x_train, y_train), batch_size=args.batch_size, shuffle=True)
+    validation_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(x_validation, y_validation), batch_size=args.batch_size, shuffle=False)
     test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(x_test, y_test), batch_size=args.batch_size, shuffle=False)
     
     relative_L2_loss_fn = LpLoss()
@@ -132,8 +138,18 @@ def main():
     if args.use_lr_scheduler:
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
 
-    # train
+    # save
+    name = 'baseline_fno'
+    path_save = f'saved/burgers_eq/{name}/{date_time_string}/'
+
+    if not os.path.exists(path_save):
+        os.makedirs(path_save)
+
+    best_validation_error = np.inf
+    validation_errors = []
     test_errors = []
+
+    # train
     for e in range(args.epochs):
         model.train()
         for i, (x, y) in enumerate(train_loader):
@@ -158,6 +174,23 @@ def main():
         if args.use_lr_scheduler:
             scheduler.step()
 
+        # early stopping based on validation set
+        validation_error = eval_model(model, validation_loader, device)
+        validation_errors.append(validation_error)
+        if validation_error < best_validation_error:
+            best_validation_error = validation_error
+            best_epoch = e
+            test_error_best_epoch = eval_model(model, test_loader, device)
+            torch.save(model.state_dict(), f'{path_save}/best_model.pt') 
+
+        to_log = {'Relative L2 validation error/Validation error': validation_error, 'Relative L2 validation error/Epoch': e}
+        wandb.log(to_log)
+
+        print('')
+        print(f'Epoch {e} - Relative L2 validation error: {validation_error}')
+        print(f'Best relative L2 validation error: {best_validation_error} at epoch {best_epoch}')
+        print(f'Relative L2 test error at best epoch: {test_error_best_epoch}')
+
         # eval
         if e % args.eval_every == 0:
             test_error = eval_model(model, test_loader, device)
@@ -177,14 +210,10 @@ def main():
     print('Final relative L2 error on test set: ', final_test_error)
     print('Best relative L2 error on test set: ', min(test_errors))
     print('Epoch with lowest relative L2 error on test set: ', test_errors.index(min(test_errors)) * args.eval_every)
+    print(f'Epoch with lowest validation error: {best_epoch}')
+    print(f'Lowest validation error: {best_validation_error}')
+    print(f'Test error for epoch with lowest validation error: {test_error_best_epoch}')
     print()
-
-    # save
-    name = 'baseline_fno'
-    path_save = f'saved/burgers_eq/{name}/{date_time_string}/'
-
-    if not os.path.exists(path_save):
-        os.makedirs(path_save)
 
     if args.save_model:
         torch.save(model.state_dict(), path_save + 'model.pt')
@@ -195,7 +224,12 @@ def main():
             file.write(f'{key}: {value}\n')
         
         # save error metrics
-        file.write(f'Best relative L2 error: {min(test_errors)}\n')
+        file.write(f'Final relative L2 error on test set: {final_test_error}\n')
+        file.write(f'Best relative L2 error on test set: {min(test_errors)}\n')
+        file.write(f'Epoch with lowest relative L2 error on test set: {test_errors.index(min(test_errors)) * args.eval_every}\n')
+        file.write(f'Epoch with lowest validation error: {best_epoch}\n')
+        file.write(f'Lowest validation error: {best_validation_error}\n')
+        file.write(f'Test error for epoch with lowest validation error: {test_error_best_epoch}\n')
 
     # close logger
     wandb.finish()

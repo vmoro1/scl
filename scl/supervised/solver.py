@@ -12,15 +12,18 @@ class PrimalDualBaseSolver:
     """Primal dual algorithm for solving constrained statistical learning 
     problems with average constrains as well as per sample constraints."""
     
-    def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, train_dataloader, test_dataloader):
+    def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, train_dataloader, validation_loader, test_dataloader, path_save):
         self.primal_lr = primal_lr
         self.dual_lr = dual_lr
         self.epochs = epochs
         self.eval_every = eval_every
         self.train_dataloader = train_dataloader
+        self.validation_loader = validation_loader
         self.test_dataloader = test_dataloader
+        self.path_save = path_save
         self.device = csl_problem.device
         self.n_train_samples = len(train_dataloader.dataset)
+        self.best_validation_error = np.inf
 
         # optimizers
         self.primal_optimizer = getattr(torch.optim, optimizers['dual_optimizer'])(csl_problem.model.parameters(), lr=primal_lr)
@@ -56,6 +59,7 @@ class PrimalDualBaseSolver:
         self.state_dict['approximate_duality_gap'] = []
         self.state_dict['aproximate_relative_duality_gap'] = []
         self.state_dict['Relative_L2_test_error'] = []
+        self.state_dict['Relative_L2_validation_error'] = []
 
     def primal_dual_update(self, csl_problem):
         """Update primal and dual variables"""
@@ -104,13 +108,31 @@ class PrimalDualBaseSolver:
         # dict for logging to wandb
         to_log_wandb = {}
 
+        # early stopping based on validation set
+        validation_error = eval_model_per_sample_constraints(csl_problem.model, self.validation_loader, self.device)
+        self.state_dict['Relative_L2_validation_error'].append(validation_error)
+        if validation_error < self.best_validation_error:
+            self.best_validation_error = validation_error
+            self.best_epoch = epoch
+            self.test_error_best_epoch = eval_model_per_sample_constraints(csl_problem.model, self.test_dataloader, self.device)
+            best_model = csl_problem.model
+            torch.save(best_model.state_dict(), f'{self.path_save}/best_model.pt') 
+            
+        to_log_wandb['Relative L2 validation error/Validation error'] = validation_error
+        to_log_wandb['Relative L2 validation error/Epoch'] = epoch
+
+        print('')
+        print(f'Epoch {epoch} - Relative L2 validation error: {validation_error}')
+        print(f'Best relative L2 validation error: {self.best_validation_error} at epoch {self.best_epoch}')
+        print(f'Relative L2 test error at best epoch: {self.test_error_best_epoch}')
+
         if epoch % self.eval_every == 0:
             test_error = eval_model_per_sample_constraints(csl_problem.model, self.test_dataloader, self.device)
             self.state_dict['Relative_L2_test_error'].append(test_error)
             to_log_wandb['Relative L2 test error/Relative L2 test error'] = test_error
             to_log_wandb['Relative L2 test error/Epoch'] = epoch
 
-            print(f'Epoch {epoch} -  Relative L2 error: {test_error}')
+            print(f'Epoch {epoch} -  Relative L2 test error: {test_error}')
 
         # log
         for i in range(len(dual_variables)):
@@ -222,13 +244,22 @@ class PrimalDualBaseSolver:
         plt.savefig(f'{path_save}/relative_L2_test_error.pdf', format='pdf', bbox_inches='tight')
         plt.close()
 
+        # plot relative L2 validation error
+        plt.figure()
+        plt.plot(epochs_eval, self.state_dict['Relative_L2_validation_error'], color='blue')
+        plt.title('Relative L2 Validation Error')
+        plt.xlabel('Epochs')
+        plt.ylabel('Relative L2 Error')
+        plt.grid(True)
+        plt.savefig(f'{path_save}/relative_L2_validation_error.pdf', format='pdf', bbox_inches='tight')
+
 
 class SimultaneousPrimalDual(PrimalDualBaseSolver):
     """Updates the primal and dual variales simultaneously (instead of primal first).
     This saves one call to evaluate the constraints which can be expensive."""
 
-    def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, train_dataloader, test_dataloader):
-        super().__init__(csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, train_dataloader, test_dataloader)
+    def __init__(self, csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, train_dataloader, validation_loader, test_dataloader, path_save):
+        super().__init__(csl_problem, optimizers, primal_lr, dual_lr, epochs, eval_every, train_dataloader, validation_loader, test_dataloader, path_save)
 
     def primal_dual_update(self, csl_problem, samples_idx, x, y, log_dict):
 

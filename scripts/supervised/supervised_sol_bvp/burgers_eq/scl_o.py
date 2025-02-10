@@ -31,7 +31,8 @@ parser.add_argument('--eps', nargs='+', default=[1e-3], help='Tolerances for the
 parser.add_argument('--per_sample_eps', nargs='+', default=[1e-3], help='Tolerances for the per sample constraints. All samples for a per sample constraint share the same tolerance.')
 parser.add_argument('--use_primal_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler for the primal variables.')
 parser.add_argument('--use_dual_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler for the dual variables.')
-parser.add_argument('--n_train', type=int, default=1000, help='Number of training samples.')
+parser.add_argument('--n_train', type=int, default=800, help='Number of training samples.')
+parser.add_argument('--n_validation', type=int, default=200, help='Number of validation samples.')
 parser.add_argument('--n_test', type=int, default=200, help='Number of test samples.')
 
 parser.add_argument('--n_modes', type=int, default=16, help='Number of Fourier modes to use.')
@@ -134,6 +135,7 @@ def main():
 
     # # TODO: remember to change this
     # args.n_train = 4
+    # args.n_validation = 2
     # args.n_test = 2
     # args.batch_size = 2
     # args.epochs = 2
@@ -169,11 +171,14 @@ def main():
                         ], dim=1)
 
     x_train = x_data[:args.n_train]        
-    y_train = y_data[:args.n_train]     
+    y_train = y_data[:args.n_train] 
+    x_validation = x_data[args.n_train:args.n_train + args.n_validation]
+    y_validation = y_data[args.n_train:args.n_train + args.n_validation]    
     x_test = x_data[-args.n_test:]
     y_test = y_data[-args.n_test:]
 
     train_loader = torch.utils.data.DataLoader(DatasetPerSampleConstraints(x_train, y_train), batch_size=args.batch_size, shuffle=True)
+    validation_loader = torch.utils.data.DataLoader(DatasetPerSampleConstraints(x_validation, y_validation), batch_size=args.batch_size, shuffle=False)
     test_loader = torch.utils.data.DataLoader(DatasetPerSampleConstraints(x_test, y_test), batch_size=args.batch_size, shuffle=False)
 
     model = FNO(
@@ -194,6 +199,13 @@ def main():
                 'dual_optimizer': 'Adam',
                 'use_dual_lr_scheduler': args.use_dual_lr_scheduler}
     
+    # save 
+    name = 'scl_o_per_sample_constraints'
+    path_save = f'saved/burgers_eq/{name}/{date_time_string}'
+
+    if not os.path.exists(path_save):
+        os.makedirs(path_save)
+    
     solver = SimultaneousPrimalDual(
         csl_problem=scl_o,
         optimizers=optimizers,
@@ -202,7 +214,9 @@ def main():
         epochs=args.epochs,
         eval_every=args.eval_every,
         train_dataloader=train_loader,
+        validation_loader=validation_loader,
         test_dataloader=test_loader,
+        path_save=path_save,
     )
     
     solver.solve(scl_o)
@@ -216,6 +230,9 @@ def main():
     print('Final relative L2 error on test set: ', final_test_error)
     print('Best relative L2 error on test set: ', min(test_errors))
     print('Epoch with lowest relative L2 error on test set: ', test_errors.index(min(test_errors)) * args.eval_every)
+    print(f'Epoch with lowest validation error: {solver.best_epoch}')
+    print(f'Lowest validation error: {solver.best_validation_error}')
+    print(f'Test error for epoch with lowest validation error: {solver.test_error_best_epoch}')
     print()
 
     # print final diagnostics
@@ -229,13 +246,6 @@ def main():
     print('Lagrangian: ', solver.state_dict['Lagrangian'][-1])
     print('Primal value: ', solver.state_dict['primal_value'][-1])
     print()
-
-    # save 
-    name = 'scl_o_per_sample_constraints'
-    path_save = f'saved/burgers_eq/{name}/{date_time_string}'
-
-    if not os.path.exists(path_save):
-        os.makedirs(path_save)
 
     if args.plot_diagnostics:
         solver.plot(path_save)
@@ -251,6 +261,11 @@ def main():
         # save error metrics
         file.write(f'Best relative L2 error: {min(test_errors)}\n')
         file.write(f'Final relative L2 error: {final_test_error}\n')
+        file.write(f'Epoch with lowest relative L2 error on test set: {test_errors.index(min(test_errors)) * args.eval_every}\n')
+        file.write(f'Epoch with lowest validation error: {solver.best_epoch}\n')
+        file.write(f'Lowest validation error: {solver.best_validation_error}\n')
+        file.write(f'Test error for epoch with lowest validation error: {solver.test_error_best_epoch}\n')
+        file.write('\n')
 
     # save state dict
     with open(f'{path_save}/state_dict.pkl', 'wb') as f:
