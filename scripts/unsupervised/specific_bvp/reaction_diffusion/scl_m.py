@@ -9,6 +9,7 @@ from datetime import datetime
 import pickle
 
 sys.path.append('.') 
+sys.path.append('/slurm-storage/vigmor/scl')
 
 import numpy as np
 import torch
