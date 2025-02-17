@@ -28,14 +28,13 @@ parser = argparse.ArgumentParser(description='SCL(M)')
 
 parser.add_argument('--seed', type=int, default=0, help='Random initialization.')
 parser.add_argument('--num_collocation_pts', type=int, default=1000, help='Number of collocation points.')
-parser.add_argument('--epochs', type=int, default=50000, help='Number of epochs to train for.')
+parser.add_argument('--epochs', type=int, default=100000, help='Number of epochs to train for.')
 parser.add_argument('--lr_primal', type=float, default=1e-3, help='Learning rate for primal variables (NN parameters).')
-parser.add_argument('--lr_dual', type=float, default=1e-4, help='Learning rate for dual variables (lambdas).')
-# parser.add_argument('--eps', nargs='+', default=[1e-3], help='Tolerances for the constraints.')
-parser.add_argument('--eps', nargs='+', default=[1e-3, 1e-5], help='Tolerances for the constraints.')
+parser.add_argument('--lr_dual', type=float, default=1e-5, help='Learning rate for dual variables (lambdas).')
+# parser.add_argument('--eps', nargs='+', default=[5e-1], help='Tolerances for the constraints.')
+parser.add_argument('--eps', nargs='+', default=[5e-1, 1e-5], help='Tolerances for the constraints.')
 parser.add_argument('--use_primal_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler for the primal variables.')
 parser.add_argument('--use_dual_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler for the dual variables.')
-parser.add_argument('--lambda_init', nargs='+', default=[0.0], help='Initial value for the dual variables.')
 parser.add_argument('--layers', type=str, default='128,128,128,128,1', help='Dimensions of layers of the NN (except the first layer).')
 
 parser.add_argument('--use_mh_sampling', action=argparse.BooleanOptionalAction, default=True, help='Whether to use Metropolis-Hastings sampling (or Langevin Monte Carlo) to to sample from psi_alpha in order to compute worst-case losses.')
@@ -52,7 +51,7 @@ parser.add_argument('--visualize', action=argparse.BooleanOptionalAction, defaul
 parser.add_argument('--plot_diagnostics', action=argparse.BooleanOptionalAction, default=True, help='Plot diagnostics of the model.')
 parser.add_argument('--save_model', action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument('--eval_every', type=int, default=1, help='Evaluate the model every n epochs.')
-parser.add_argument('--on_horeka', action=argparse.BooleanOptionalAction, default=False, help='Whether to run on Horeka or not.')
+parser.add_argument('--run_location', type=str, default='local', help='Where the script is executed', choices=['local', 'horeka', 'bro_cluster'])
 
 
 class SCL_M(ConstrainedStatisticalLearningProblem):

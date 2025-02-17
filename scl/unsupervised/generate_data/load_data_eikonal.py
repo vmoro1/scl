@@ -7,10 +7,14 @@ from ..utils import *
 
 
 def load_eikonal_data(args):
-    if args.on_horeka:
-        data = torch.load('/home/hk-project-test-p0021798/st_ac144859/csl_pinn/data/eikonal_gear.pt')
-    else:
+    if args.run_location == 'local':
         data = torch.load('data/unsupervised/eikonal_gear.pt')
+    elif args.run_location == 'horeka':
+        data = torch.load('/home/hk-project-test-p0021798/st_ac144859/scl/data/unsupervised/eikonal_gear.pt')
+    elif args.run_location == 'brocluster':
+        data = torch.load('/slurm-storage/vigmor/scl/data/unsupervised/eikonal_gear.pt')
+    else:
+        raise ValueError('Invalid run location')
         
     u_exact = data['sdf']
     u_exact_1d = u_exact.flatten().reshape(-1, 1) 

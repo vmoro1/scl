@@ -21,7 +21,7 @@ parser = argparse.ArgumentParser(description='PINN baseline')
 parser.add_argument('--seed', type=int, default=0, help='Random initialization.')
 parser.add_argument('--num_collocation_pts', type=int, default=1000, help='Number of collocation points.')
 parser.add_argument('--fixed_collocation_pts', action=argparse.BooleanOptionalAction, default=False, help='Whether to use fixed collocation points or sample new ones at each epoch.')
-parser.add_argument('--epochs', type=int, default=50000, help='Number of epochs to train for.')
+parser.add_argument('--epochs', type=int, default=100000, help='Number of epochs to train for.')
 parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate.')
 parser.add_argument('--use_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler.')
 parser.add_argument('--ic_loss_weight', type=float, default=500.0, help='Weight for the data loss.')
@@ -31,7 +31,7 @@ parser.add_argument('--layers', type=str, default='128,128,128,128,1', help='Dim
 parser.add_argument('--visualize', action=argparse.BooleanOptionalAction, default=True, help='Visualize the solution and prediction of the model.')
 parser.add_argument('--save_model', action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument('--eval_every', type=int, default=1, help='Evaluate the model every n epochs.')
-parser.add_argument('--on_horeka', action=argparse.BooleanOptionalAction, default=False, help='Whether to run on Horeka or not.')
+parser.add_argument('--run_location', type=str, default='local', help='Where the script is executed', choices=['local', 'horeka', 'bro_cluster'])
 
 
 class PINN:
@@ -220,7 +220,7 @@ def main():
             torch.save(best_model.state_dict(), f'{path_save}/best_model.pt')
             
             u_pred = pinn.predict(X_test)
-            best_rel_l2_error = np.linalg.norm(u_exact-u_pred, 2)/np.linalg.norm(u_exact, 2)
+            best_rel_l2_error = np.linalg.norm(u_exact_1d-u_pred, 2)/np.linalg.norm(u_exact, 2)
         
         loss_list.append(loss.item())
 
