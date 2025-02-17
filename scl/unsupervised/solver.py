@@ -38,6 +38,7 @@ class PrimalDualBase:
 
         # attributes for early stopping in diagnostics
         self.solving_specific_BVP = solving_specific_BVP
+        self.best_epoch = None
         self.best_primal_value = np.inf
         self.path_save = path_save
 

@@ -9,6 +9,7 @@ from datetime import datetime
 import pickle
 
 sys.path.append('.') 
+sys.path.append('/slurm-storage/vigmor/scl')
 
 import numpy as np
 import torch
@@ -359,13 +360,16 @@ def main():
     print('L_inf error: %e' % (error_u_linf))
     print('')
 
-    idx_best = int(solver.best_epoch / args.eval_every)
-    pde_param = next(iter(data_dict))   # there's only one pde_param
-    print('Test metrics for epoch with arly stopping:')
-    print('Relative error: %e' % (solver.state_dict['Relative Error'][f'Relative Error_pde_param_{pde_param}'][idx_best]))
-    print('Absolute error: %e' % (solver.state_dict['Absolute Error'][f'Absolute Error_pde_param_{pde_param}'][idx_best]))
-    print('L_inf error: %e' % (solver.state_dict['linf Error'][f'linf Error_pde_param_{pde_param}'][idx_best]))
-    print('')
+    if solver.best_epoch is not None:
+        idx_best = int(solver.best_epoch / args.eval_every)
+        pde_param = next(iter(data_dict))   # there's only one pde_param
+        print('Test metrics for epoch with arly stopping:')
+        print('Relative error: %e' % (solver.state_dict['Relative Error'][f'Relative Error_pde_param_{pde_param}'][idx_best]))
+        print('Absolute error: %e' % (solver.state_dict['Absolute Error'][f'Absolute Error_pde_param_{pde_param}'][idx_best]))
+        print('L_inf error: %e' % (solver.state_dict['linf Error'][f'linf Error_pde_param_{pde_param}'][idx_best]))
+        print('')
+    else:
+        print('No early stopping')
 
     # save arguments
     with open(f'{path_save}/args.txt', 'w') as file:
@@ -377,23 +381,26 @@ def main():
         file.write(f'Absolute error: {error_u_abs}\n')
         file.write(f'linf error: {error_u_linf}\n')
 
-        # save metrics for early stopping
-        file.write(f'Best relative error: {solver.best_rel_l2_error}\n')
-        file.write(f'Best epoch: {solver.best_epoch}\n')
-        file.write(f'Relative error at early stopping: {solver.state_dict["Relative Error"][f"Relative Error_pde_param_{pde_param}"][idx_best]}\n')
-        file.write(f'Absolute error at early stopping: {solver.state_dict["Absolute Error"][f"Absolute Error_pde_param_{pde_param}"][idx_best]}\n')
-        file.write(f'linf error at early stopping: {solver.state_dict["linf Error"][f"linf Error_pde_param_{pde_param}"][idx_best]}\n')
+        if solver.best_epoch is not None:
+            # save metrics for early stopping
+            file.write(f'Best relative error: {solver.best_rel_l2_error}\n')
+            file.write(f'Best epoch: {solver.best_epoch}\n')
+            file.write(f'Relative error at early stopping: {solver.state_dict["Relative Error"][f"Relative Error_pde_param_{pde_param}"][idx_best]}\n')
+            file.write(f'Absolute error at early stopping: {solver.state_dict["Absolute Error"][f"Absolute Error_pde_param_{pde_param}"][idx_best]}\n')
+            file.write(f'linf error at early stopping: {solver.state_dict["linf Error"][f"linf Error_pde_param_{pde_param}"][idx_best]}\n')
+        else:
+            file.write('No early stopping\n')
 
     # save state dict
     with open(f'{path_save}/state_dict.pkl', 'wb') as f:
         pickle.dump(solver.state_dict, f)
 
     # best model
-    print('Best model at epoch:', solver.best_epoch)
-    print('Best relative L2 error:', solver.best_rel_l2_error)
+    if solver.best_epoch is not None:
+        print('Best model at epoch:', solver.best_epoch)
+        print('Best relative L2 error:', solver.best_rel_l2_error)
     
     
-
 if __name__ == '__main__':
     import time
     start = time.time()

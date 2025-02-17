@@ -6,6 +6,7 @@ import argparse
 from datetime import datetime
 
 sys.path.append('.') 
+sys.path.append('/slurm-storage/vigmor/scl')
 
 import numpy as np
 import torch

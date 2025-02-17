@@ -38,7 +38,7 @@ parser.add_argument('--source', default=0, type=float, help="Source term. Not us
 
 parser.add_argument('--visualize', action=argparse.BooleanOptionalAction, default=True, help='Visualize the solution and prediction of the model.')
 parser.add_argument('--save_model', action=argparse.BooleanOptionalAction, default=True)
-parser.add_argument('--eval_every', type=int, default=100, help='Evaluate the model every n epochs.')
+parser.add_argument('--eval_every', type=int, default=1, help='Evaluate the model every n epochs.')
 
 
 class PINN:
@@ -241,6 +241,22 @@ def main():
     rel_error = []
     abs_error = []
     linf_error = []
+    loss_list = []
+
+    # for early stopping
+    best_loss = np.inf
+    best_model = None
+
+    # for saving
+    now = datetime.now()
+    date_time_string = now.strftime("%Y-%m-%d %H:%M:%S")
+    suffix = f'baseline_pinn_rd'
+    dir_name = date_time_string  + '_' + suffix
+
+    path_save = f'saved/rd/{dir_name}'
+
+    if not os.path.exists(path_save):
+        os.makedirs(path_save)
 
     model.train()
     for e in range(args.epochs):
@@ -251,6 +267,17 @@ def main():
 
         if args.use_lr_scheduler:
             lr_scheduler.step()
+
+        if loss.item() < best_loss:
+            best_loss = loss.item()
+            best_model = pinn.model
+            epoch = e
+            torch.save(best_model.state_dict(), f'{path_save}/best_model.pt')
+            
+            u_pred = pinn.predict(X_test)
+            best_rel_l2_error = np.linalg.norm(u_exact-u_pred, 2)/np.linalg.norm(u_exact, 2)
+        
+        loss_list.append(loss.item())
 
         # eval
         if e % args.eval_every == 0:
@@ -270,23 +297,21 @@ def main():
     error_u_abs = np.mean(np.abs(u_exact - u_pred))
     error_u_linf = np.linalg.norm(u_exact - u_pred, np.inf)  /np.linalg.norm(u_exact, np.inf)
 
-    print('Test metrics:')
+    print('Test metrics at final epoch:')
     print('Relative error: %e' % (error_u_relative))
     print('Absolute error: %e' % (error_u_abs))
     print('L_inf error: %e' % (error_u_linf))
     print('')
 
+    idx_best = int(epoch / args.eval_every)
+    print('Test metrics for epoch with the lowest loss:')
+    print('Relative error: %e' % (rel_error[idx_best]))
+    print('Absolute error: %e' % (abs_error[idx_best]))
+    print('L_inf error: %e' % (linf_error[idx_best]))
+    print('')
+
     # visualize PINN solution
-    now = datetime.now()
-    date_time_string = now.strftime("%Y-%m-%d %H:%M:%S")
-    suffix = f'baseline_pinn_rd'
-    dir_name = date_time_string  + '_' + suffix
-
-    path_save = f'saved/rd/{dir_name}'
-
     if args.save_model:
-        if not os.path.exists(path_save):
-            os.makedirs(path_save)
         torch.save(pinn.model.state_dict(), f"{path_save}/model.pt")
         torch.save(optimizer.state_dict(), f'{path_save}/optimizer.pt')
 
@@ -310,14 +335,29 @@ def main():
         file.write(f'Absolute error: {error_u_abs}\n')
         file.write(f'L_inf error: {error_u_linf}\n')
 
+        file.write(f'Best relative error: {best_rel_l2_error}\n')
+        file.write(f'Best epoch: {epoch}\n')
+        file.write(f'Best relative error: {rel_error[idx_best]}\n')
+        file.write(f'Best absolute error: {abs_error[idx_best]}\n')
+        file.write(f'Best L_inf error: {linf_error[idx_best]}\n')
+
     # plot errors
     plot_errors(rel_error, abs_error, linf_error, args.epochs, args.eval_every, path_save)
 
-    # save relative error
+    # save errors
     np.save(f'{path_save}/relative_error.npy', rel_error)
+    np.save(f'{path_save}/absolute_error.npy', abs_error)
+    np.save(f'{path_save}/linf_error.npy', linf_error)
+
+    # save loss
+    np.save(f'{path_save}/loss.npy', loss_list)
 
     # save u_pred
     np.save(f'{path_save}/u_pred.npy', u_pred.T)
+
+    # best model
+    print('Best model at epoch:', epoch)
+    print('Best relative L2 error:', best_rel_l2_error)
     
 
 if __name__ == '__main__':

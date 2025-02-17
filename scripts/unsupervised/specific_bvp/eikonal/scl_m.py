@@ -51,7 +51,7 @@ parser.add_argument('--sigma_xy', type=float, default=0.0, help='Standard deviat
 parser.add_argument('--visualize', action=argparse.BooleanOptionalAction, default=True, help='Visualize the solution and prediction of the model.')
 parser.add_argument('--plot_diagnostics', action=argparse.BooleanOptionalAction, default=True, help='Plot diagnostics of the model.')
 parser.add_argument('--save_model', action=argparse.BooleanOptionalAction, default=True)
-parser.add_argument('--eval_every', type=int, default=100, help='Evaluate the model every n epochs.')
+parser.add_argument('--eval_every', type=int, default=1, help='Evaluate the model every n epochs.')
 parser.add_argument('--on_horeka', action=argparse.BooleanOptionalAction, default=False, help='Whether to run on Horeka or not.')
 
 
@@ -195,6 +195,16 @@ def main():
     # set set for reproducibility
     set_seed(args.seed)
 
+    # for saving
+    now = datetime.now()
+    date_time_string = now.strftime("%Y-%m-%d %H:%M:%S")
+    suffix = f'scl_m_eikonal'
+    dir_name = date_time_string  + '_' + suffix
+    path_save = f'saved/eikonal/{dir_name}'
+
+    if not os.path.exists(path_save):
+        os.makedirs(path_save)
+
     # define constrained learning problem
     model = MLP(layers, 'tanh').to(device)
     constrained_pinn = SCL_M(
@@ -210,7 +220,14 @@ def main():
                 'use_dual_lr_scheduler': args.use_dual_lr_scheduler}
     
     data_dict = {'Eikonal': {'X_test': X_test, 'u_exact': u_exact_1d}}      # data used for eval/test
-    solver = SimultaneousPrimalDual(constrained_pinn, optimizers, args.lr_primal, args.lr_dual, args.epochs, args.eval_every, data_dict)
+    solver = SimultaneousPrimalDual(constrained_pinn, 
+                                    optimizers, args.lr_primal, 
+                                    args.lr_dual, 
+                                    args.epochs, 
+                                    args.eval_every, 
+                                    data_dict,
+                                    solving_specific_BVP=True,
+                                    path_save=path_save)
 
     # solve constrained learning problem
     solver.solve(constrained_pinn)
@@ -230,15 +247,7 @@ def main():
     print('Primal value: ', solver.state_dict['primal_value'][-1])
 
     # visualize PINN solution and plot diagnostics
-    now = datetime.now()
-    date_time_string = now.strftime("%Y-%m-%d %H:%M:%S")
-    suffix = f'scl_m_eikonal'
-    dir_name = date_time_string  + '_' + suffix
-    path_save = f'saved/eikonal/{dir_name}'
-
     if args.visualize:
-        if not os.path.exists(path_save):
-            os.makedirs(path_save)
         u_pred = u_pred.reshape(len(y), len(x))
         plot_exact_u(u_exact, x, y, path_save, label_x='x', label_y='y', flip_axis_plotting=False, cmap='coolwarm')
         plot_u_diff(u_exact, u_pred, x, y, path_save, label_x='x', label_y='y', flip_axis_plotting=False)
@@ -261,11 +270,22 @@ def main():
     error_u_abs = np.mean(np.abs(u_exact_1d - u_pred))
     error_u_linf = np.linalg.norm(u_exact_1d - u_pred, np.inf) / np.linalg.norm(u_exact, np.inf)
 
-    print('Test metrics:')
+    print('Test metrics at final epoch:')
     print('Relative error: %e' % (error_u_relative))
     print('Absolute error: %e' % (error_u_abs))
     print('L_inf error: %e' % (error_u_linf))
     print('')
+
+    if solver.best_epoch is not None:
+        idx_best = int(solver.best_epoch / args.eval_every)
+        pde_param = next(iter(data_dict))   # there's only one pde_param
+        print('Test metrics for epoch with arly stopping:')
+        print('Relative error: %e' % (solver.state_dict['Relative Error'][f'Relative Error_pde_param_{pde_param}'][idx_best]))
+        print('Absolute error: %e' % (solver.state_dict['Absolute Error'][f'Absolute Error_pde_param_{pde_param}'][idx_best]))
+        print('L_inf error: %e' % (solver.state_dict['linf Error'][f'linf Error_pde_param_{pde_param}'][idx_best]))
+        print('')
+    else:
+        print('No early stopping')
 
     # save arguments
     with open(f'{path_save}/args.txt', 'w') as file:
@@ -277,9 +297,24 @@ def main():
         file.write(f'Absolute error: {error_u_abs}\n')
         file.write(f'linf error: {error_u_linf}\n')
 
+        if solver.best_epoch is not None:
+            # save metrics for early stopping
+            file.write(f'Best relative error: {solver.best_rel_l2_error}\n')
+            file.write(f'Best epoch: {solver.best_epoch}\n')
+            file.write(f'Relative error at early stopping: {solver.state_dict["Relative Error"][f"Relative Error_pde_param_{pde_param}"][idx_best]}\n')
+            file.write(f'Absolute error at early stopping: {solver.state_dict["Absolute Error"][f"Absolute Error_pde_param_{pde_param}"][idx_best]}\n')
+            file.write(f'linf error at early stopping: {solver.state_dict["linf Error"][f"linf Error_pde_param_{pde_param}"][idx_best]}\n')
+        else:
+            file.write('No early stopping\n')
+
     # save state dict
     with open(f'{path_save}/state_dict.pkl', 'wb') as f:
         pickle.dump(solver.state_dict, f)
+
+    # best model
+    if solver.best_epoch is not None:
+        print('Best model at epoch:', solver.best_epoch)
+        print('Best relative L2 error:', solver.best_rel_l2_error)
     
 
 if __name__ == '__main__':
