@@ -10,6 +10,8 @@ import pickle
 import torch.utils
 
 sys.path.append('.')
+sys.path.append('/slurm-storage/vigmor/scl')
+sys.path.append('/home/gridsan/vmoro/scl')
 
 import torch
 import wandb
@@ -46,7 +48,7 @@ parser.add_argument('--visualize', default=False, help='Visualize the solution a
 parser.add_argument('--plot_diagnostics', default=True, help='Plot diagnostics of the model.')
 parser.add_argument('--wandb_project_name', type=str, default='scl_supervised')   
 parser.add_argument('--wandb_run_name', type=str, default='scl_o_burgers_eq_per_sample_constraints')
-parser.add_argument('--run_location', choices=['locally', 'supercloud', 'horeka'], default='locally', help='Choose where the script is executed.')
+parser.add_argument('--run_location', choices=['locally', 'supercloud', 'horeka', 'brocluster'], default='locally', help='Choose where the script is executed.')
 
 
 class SCL_O(ConstrainedStatisticalLearningProblem):
@@ -110,6 +112,8 @@ def main():
         path_base = "/home/gridsan/vmoro/scl/"
     elif args.run_location == 'horeka':
         path_base = "/home/hk-project-test-p0021798/st_ac144859/scl/"
+    elif args.run_location == 'brocluster':
+        path_base = "/slurm-storage/vigmor/scl/"
     else:
         raise ValueError('Invalid run location')
 

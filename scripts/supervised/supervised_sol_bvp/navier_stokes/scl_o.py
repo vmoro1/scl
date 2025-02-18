@@ -11,6 +11,8 @@ import pickle
 import torch.utils
 
 sys.path.append('.')
+sys.path.append('/slurm-storage/vigmor/scl')
+sys.path.append('/home/gridsan/vmoro/scl')
 
 import torch
 import wandb
@@ -28,13 +30,14 @@ parser.add_argument('--epochs', type=int, default=500, help='Number of epochs to
 parser.add_argument('--batch_size', type=int, default=20, help='Batch size for training.')
 parser.add_argument('--lr_primal', type=float, default=1e-3, help='Learning rate for primal variables (NN parameters).')
 parser.add_argument('--lr_dual', type=float, default=1e-4, help='Learning rate for dual variables (lambdas).')
-parser.add_argument('--eps', nargs='+', default=[1e-3], help='Tolerances for the constraints.')
-parser.add_argument('--per_sample_eps', nargs='+', default=[1e-3], help='Tolerances for the per sample constraints. All samples for a per sample constraint share the same tolerance.')
+parser.add_argument('--eps', nargs='+', default=[1e-2], help='Tolerances for the constraints.')
+parser.add_argument('--per_sample_eps', nargs='+', default=[1e-2], help='Tolerances for the per sample constraints. All samples for a per sample constraint share the same tolerance.')
 parser.add_argument('--use_primal_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler for the primal variables.')
 parser.add_argument('--use_dual_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler for the dual variables.')
 
 parser.add_argument('--viscosity', type=float, choices=[1e-3, 1e-4, 1e-5], default=1e-3, help='Viscosity of the fluid.')
-parser.add_argument('--n_train', type=int, default=1000, help='Number of training samples.')
+parser.add_argument('--n_train', type=int, default=800, help='Number of training samples.')
+parser.add_argument('--n_validation', type=int, default=200, help='Number of validation samples.')
 parser.add_argument('--n_test', type=int, default=200, help='Number of test samples.')
 
 parser.add_argument('--n_modes', type=int, default=8, help='Number of Fourier modes to use.')
@@ -48,7 +51,7 @@ parser.add_argument('--visualize', default=False, help='Visualize the solution a
 parser.add_argument('--plot_diagnostics', default=True, help='Plot diagnostics of the model.')
 parser.add_argument('--wandb_project_name', type=str, default='scl_supervised')   
 parser.add_argument('--wandb_run_name', type=str, default='scl_o_navier_stokes_per_sample_constraints')
-parser.add_argument('--run_location', choices=['locally', 'supercloud', 'horeka'], default='locally', help='Choose where the script is executed.')
+parser.add_argument('--run_location', choices=['locally', 'supercloud', 'horeka', 'brocluster'], default='locally', help='Choose where the script is executed.')
 
 
 class SCL_O(ConstrainedStatisticalLearningProblem):
@@ -112,6 +115,8 @@ def main():
         path_base = "/home/gridsan/vmoro/scl/"
     elif args.run_location == 'horeka':
         path_base = "/home/hk-project-test-p0021798/st_ac144859/scl/"
+    elif args.run_location == 'brocluster':
+        path_base = "/slurm-storage/vigmor/scl/"
     else:
         raise ValueError('Invalid run location')
 
@@ -135,11 +140,12 @@ def main():
         config=config
         )
     
-    # TODO: remember to change this
-    args.n_train = 4
-    args.n_test = 2
-    args.batch_size = 2
-    args.epochs = 2
+    # # TODO: remember to change this
+    # args.n_train = 4
+    # args.n_validation = 2
+    # args.n_test = 2
+    # args.batch_size = 2
+    # args.epochs = 2
 
     # load data - the first time step is used to predict all other time steps (including the first one)
     if args.viscosity == 1e-3:
@@ -194,10 +200,13 @@ def main():
 
     x_train = x_data[:args.n_train]        
     y_train = y_data[:args.n_train]
+    x_validation = x_data[args.n_train:args.n_train + args.n_validation]
+    y_validation = y_data[args.n_train:args.n_train + args.n_validation]   
     x_test = x_data[-args.n_test:]
     y_test = y_data[-args.n_test:]        
 
     train_loader = torch.utils.data.DataLoader(DatasetPerSampleConstraints(x_train, y_train), batch_size=args.batch_size, shuffle=True)
+    validation_loader = torch.utils.data.DataLoader(DatasetPerSampleConstraints(x_validation, y_validation), batch_size=args.batch_size, shuffle=False)
     test_loader = torch.utils.data.DataLoader(DatasetPerSampleConstraints(x_test, y_test), batch_size=args.batch_size, shuffle=False)
 
     model = FNO(
@@ -217,7 +226,13 @@ def main():
                   'use_primal_lr_scheduler': args.use_primal_lr_scheduler,
                 'dual_optimizer': 'Adam',
                 'use_dual_lr_scheduler': args.use_dual_lr_scheduler}
-    
+    # save 
+    name = 'scl_o_per_sample_constraints'
+    path_save = f'saved/navier_stokes/{name}/{date_time_string}'
+
+    if not os.path.exists(path_save):
+        os.makedirs(path_save)
+
     solver = SimultaneousPrimalDual(
         csl_problem=scl_o,
         optimizers=optimizers,
@@ -226,7 +241,9 @@ def main():
         epochs=args.epochs,
         eval_every=args.eval_every,
         train_dataloader=train_loader,
+        validation_loader=validation_loader,
         test_dataloader=test_loader,
+        path_save=path_save
     )
     solver.solve(scl_o)
 
@@ -240,6 +257,11 @@ def main():
     print('Best relative L2 error on test set: ', min(test_errors))
     print('Epoch with lowest relative L2 error on test set: ', test_errors.index(min(test_errors)) * args.eval_every)
     print()
+    print(f'Epoch with lowest validation error: {solver.best_epoch}')
+    print(f'Lowest validation error: {solver.best_validation_error}')
+    print(f'Test error for epoch with lowest validation error: {solver.test_error_best_epoch}')
+    print()
+
 
     # print final diagnostics
     print('Final diagnostics:')
@@ -252,13 +274,6 @@ def main():
     print('Lagrangian: ', solver.state_dict['Lagrangian'][-1])
     print('Primal value: ', solver.state_dict['primal_value'][-1])
     print()
-
-    # save 
-    name = 'scl_o_per_sample_constraints'
-    path_save = f'saved/navier_stokes/{name}/{date_time_string}'
-
-    if not os.path.exists(path_save):
-        os.makedirs(path_save)
 
     if args.plot_diagnostics:
         solver.plot(path_save)
@@ -274,6 +289,11 @@ def main():
         # save error metrics
         file.write(f'Best relative L2 error: {min(test_errors)}\n')
         file.write(f'Final relative L2 error: {final_test_error}\n')
+        file.write(f'Epoch with lowest relative L2 error on test set: {test_errors.index(min(test_errors)) * args.eval_every}\n')
+        file.write(f'Epoch with lowest validation error: {solver.best_epoch}\n')
+        file.write(f'Lowest validation error: {solver.best_validation_error}\n')
+        file.write(f'Test error for epoch with lowest validation error: {solver.test_error_best_epoch}\n')
+        file.write('\n')
 
     # save state dict
     with open(f'{path_save}/state_dict.pkl', 'wb') as f:

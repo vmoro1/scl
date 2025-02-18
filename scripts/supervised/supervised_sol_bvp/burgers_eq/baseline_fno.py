@@ -6,6 +6,8 @@ import argparse
 from datetime import datetime
 
 sys.path.append('.')
+sys.path.append('/slurm-storage/vigmor/scl')
+sys.path.append('/home/gridsan/vmoro/scl')
 
 import torch
 import wandb
@@ -22,7 +24,6 @@ parser.add_argument('--batch_size', type=int, default=20, help='Batch size for t
 parser.add_argument('--use_lr_scheduler', action=argparse.BooleanOptionalAction, default=True, help='Whether to use a learning rate scheduler.')
 parser.add_argument('--n_train', type=int, default=800, help='Number of training samples.')
 parser.add_argument('--n_validation', type=int, default=200, help='Number of validation samples.')
-
 parser.add_argument('--n_test', type=int, default=200, help='Number of test samples.')
 
 parser.add_argument('--n_modes', type=int, default=16, help='Number of Fourier modes to use.')
@@ -35,7 +36,7 @@ parser.add_argument('--eval_every', type=int, default=1, help='Evaluate the mode
 parser.add_argument('--visualize', default=False, help='Visualize the solution and prediction of the model.')
 parser.add_argument('--wandb_project_name', type=str, default='scl_supervised')   
 parser.add_argument('--wandb_run_name', type=str, default='baseline_fno_burgers_eq')
-parser.add_argument('--run_location', choices=['locally', 'supercloud', 'horeka'], default='locally', help='Choose where the script is executed.')
+parser.add_argument('--run_location', choices=['locally', 'supercloud', 'horeka', 'brocluster'], default='locally', help='Choose where the script is executed.')
 
 
 def main():
@@ -49,6 +50,8 @@ def main():
         path_base = "/home/gridsan/vmoro/scl/"
     elif args.run_location == 'horeka':
         path_base = "/home/hk-project-test-p0021798/st_ac144859/scl/"
+    elif args.run_location == 'brocluster':
+        path_base = "/slurm-storage/vigmor/scl/"
     else:
         raise ValueError('Invalid run location')
 
