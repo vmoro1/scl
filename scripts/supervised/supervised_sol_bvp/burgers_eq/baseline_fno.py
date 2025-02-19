@@ -234,6 +234,10 @@ def main():
         file.write(f'Lowest validation error: {best_validation_error}\n')
         file.write(f'Test error for epoch with lowest validation error: {test_error_best_epoch}\n')
 
+    # saver errors
+    np.save(f'{path_save}/validation_errors.npy', np.array(validation_errors))
+    np.save(f'{path_save}/test_errors.npy', np.array(test_errors))
+
     # close logger
     wandb.finish()
 

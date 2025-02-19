@@ -11,7 +11,7 @@ def load_eikonal_data(args):
         data = torch.load('data/unsupervised/eikonal_gear.pt')
     elif args.run_location == 'horeka':
         data = torch.load('/home/hk-project-test-p0021798/st_ac144859/scl/data/unsupervised/eikonal_gear.pt')
-    elif args.run_location == 'brocluster':
+    elif args.run_location == 'bro_cluster':
         data = torch.load('/slurm-storage/vigmor/scl/data/unsupervised/eikonal_gear.pt')
     else:
         raise ValueError('Invalid run location')
