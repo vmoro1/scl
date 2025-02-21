@@ -194,8 +194,9 @@ def main():
                 'dual_optimizer': 'Adam',
                 'use_dual_lr_scheduler': args.use_dual_lr_scheduler}
     # save 
+    random_number = torch.rand(1).item()    # used to avoid problem on cluster where two scripts are executed at the same time (trying to create already existing directory)
     name = 'scl_o_per_sample_constraints'
-    path_save = f'saved/diffusion_sorption/{name}/{date_time_string}'
+    path_save = f'saved/diffusion_sorption/{name}/{date_time_string}_{random_number}'
 
     if not os.path.exists(path_save):
         os.makedirs(path_save)

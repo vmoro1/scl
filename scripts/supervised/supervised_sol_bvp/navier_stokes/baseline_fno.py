@@ -166,8 +166,9 @@ def main():
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
 
     # save
+    random_number = torch.rand(1).item()    # used to avoid problem on cluster where two scripts are executed at the same time (trying to create already existing directory)
     name = 'baseline_fno'
-    path_save = f'saved/navier_stokes/{name}/{date_time_string}/' 
+    path_save = f'saved/navier_stokes/{name}/{date_time_string}_{random_number}/' 
 
     if not os.path.exists(path_save):
         os.makedirs(path_save)
