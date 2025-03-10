@@ -20,3 +20,17 @@ Each folder is further organized by the specific PDEs considered, such as Burger
    Install the required Python packages: `pip install -r requirements.txt`
 
 A python3 environment can be created prior to this, e.g. `conda create -n scl python=3.11.11; conda activate scl`
+
+## Citation
+
+If you find this repository useful for your research, please consider citing our paper:
+
+```bibtex
+@inproceedings{
+moro2025solving,
+title={Solving Differential Equations with Constrained Learning},
+author={Viggo Moro and Luiz F. O. Chamon},
+booktitle={The Thirteenth International Conference on Learning Representations},
+year={2025},
+url={https://openreview.net/forum?id=5KqveQdXiZ}
+}
